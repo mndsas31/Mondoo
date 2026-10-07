@@ -1,0 +1,6 @@
+{
+  "name": "MondoFlix",
+  "description": "A premium movie discovery website styled like Netflix.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

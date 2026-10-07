@@ -1,0 +1,35 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Force HTTPS if available
+  <IfModule mod_ssl.c>
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP_HOST} ^mondoflix\.bond$ [NC,OR]
+    RewriteCond %{HTTP_HOST} ^www\.mondoflix\.bond$ [NC]
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  </IfModule>
+
+  # Exclude /api path from SPA routing (routes directly to api/index.php)
+  RewriteCond %{REQUEST_URI} ^/api/ [NC]
+  RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+  # Don't rewrite real existing files or directories
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route all other SPA requests to index.html
+  RewriteRule ^ index.html [QSA,L]
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs .jsx .ts .tsx
+  AddType text/css .css
+  AddType image/svg+xml .svg
+  AddType application/json .json
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json
+</IfModule>

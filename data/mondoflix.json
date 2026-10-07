@@ -1,0 +1,139 @@
+{
+  "users": [],
+  "parties": {
+    "A2FTFA": {
+      "id": 1790088912404,
+      "code": "A2FTFA",
+      "host_user_id": "anon-1790088912404",
+      "host_name": "Party Host",
+      "media_id": 27205,
+      "media_type": "movie",
+      "season": null,
+      "episode": null,
+      "title": "Inception",
+      "poster_path": null,
+      "is_playing": true,
+      "position_seconds": 0,
+      "state_updated_at": "2026-09-22T14:55:12.404Z",
+      "server_key": null,
+      "version": 1,
+      "is_active": false,
+      "only_host_controls": true,
+      "created_at": "2026-09-22T14:55:12.404Z",
+      "ended_at": "2026-09-24T12:55:51.246Z"
+    },
+    "VGLBSS": {
+      "id": 1790254486434,
+      "code": "VGLBSS",
+      "host_user_id": "anon-1790254486434",
+      "host_name": "Party Host",
+      "media_id": 123,
+      "media_type": "movie",
+      "season": null,
+      "episode": null,
+      "title": "Test Movie",
+      "poster_path": null,
+      "is_playing": true,
+      "position_seconds": 0,
+      "state_updated_at": "2026-09-24T12:54:46.434Z",
+      "server_key": null,
+      "version": 1,
+      "is_active": true,
+      "only_host_controls": true,
+      "created_at": "2026-09-24T12:54:46.434Z",
+      "ended_at": null
+    },
+    "RFB8K6": {
+      "id": 1790255466581,
+      "code": "RFB8K6",
+      "host_user_id": "anon-1790255466581",
+      "host_name": "Party Host",
+      "media_id": 1101383,
+      "media_type": "movie",
+      "season": null,
+      "episode": null,
+      "title": "Test Watch Party",
+      "poster_path": null,
+      "is_playing": true,
+      "position_seconds": 0,
+      "state_updated_at": "2026-09-24T13:11:06.581Z",
+      "server_key": null,
+      "version": 1,
+      "is_active": true,
+      "only_host_controls": true,
+      "created_at": "2026-09-24T13:11:06.581Z",
+      "ended_at": null
+    }
+  },
+  "party_members": {
+    "A2FTFA": [
+      {
+        "id": 1790088912404,
+        "user_id": "anon-1790088912404",
+        "name": "Party Host",
+        "avatar": "👑",
+        "color": "#06b6d4",
+        "is_host": true,
+        "online": true,
+        "joined_at": "2026-09-22T14:55:12.404Z",
+        "last_seen_at": "2026-09-22T14:55:12.404Z"
+      }
+    ],
+    "VGLBSS": [
+      {
+        "id": 1790254486434,
+        "user_id": "anon-1790254486434",
+        "name": "Party Host",
+        "avatar": "👑",
+        "color": "#06b6d4",
+        "is_host": true,
+        "online": true,
+        "joined_at": "2026-09-24T12:54:46.434Z",
+        "last_seen_at": "2026-09-24T12:54:46.434Z"
+      }
+    ],
+    "RFB8K6": [
+      {
+        "id": 1790255466581,
+        "user_id": "anon-1790255466581",
+        "name": "Party Host",
+        "avatar": "👑",
+        "color": "#06b6d4",
+        "is_host": true,
+        "online": true,
+        "joined_at": "2026-09-24T13:11:06.581Z",
+        "last_seen_at": "2026-09-24T13:11:06.581Z"
+      }
+    ]
+  },
+  "party_messages": {
+    "VGLBSS": [
+      {
+        "id": 1790254486434,
+        "party_code": "VGLBSS",
+        "user_id": "anon-1790254486434",
+        "user_name": "System",
+        "kind": "system",
+        "body": "🎬 Watch Party started for Test Movie",
+        "created_at": "2026-09-24T12:54:46.434Z"
+      }
+    ],
+    "RFB8K6": [
+      {
+        "id": 1790255466581,
+        "party_code": "RFB8K6",
+        "user_id": "anon-1790255466581",
+        "user_name": "System",
+        "kind": "system",
+        "body": "🎬 Watch Party started for Test Watch Party",
+        "created_at": "2026-09-24T13:11:06.581Z"
+      }
+    ]
+  },
+  "watchlist": [],
+  "progress": [],
+  "settings": {},
+  "notifications": [],
+  "search_history": [],
+  "sources": []
+}

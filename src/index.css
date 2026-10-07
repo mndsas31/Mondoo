@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-cyan: #06b6d4;
+  --color-brand-violet: #8b5cf6;
+  --color-brand-navy: #020617;
+  --color-brand-dark: #0f172a;
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .ribbon-clip {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 8px), 0 100%);
+  }
+  
+  .text-shadow-md {
+    text-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+  }
+  .text-shadow-xl {
+    text-shadow: 0px 4px 12px rgba(0,0,0,0.8);
+  }
+  
+  .glass {
+    @apply bg-slate-900/60 backdrop-blur-md border border-slate-700/50;
+  }
+  .glass-card {
+    @apply bg-slate-900/80 backdrop-blur-sm border border-slate-700/50 hover:border-cyan-500/50 transition-all shadow-lg;
+  }
+}
+
+body {
+  background-color: #020617; /* Slate 950 */
+  color: white;
+  overflow-x: hidden;
+}
