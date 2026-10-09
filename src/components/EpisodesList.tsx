@@ -14,6 +14,7 @@ interface EpisodesListProps {
   onlyHostControls?: boolean;
   partyCode?: string | null;
   onRequestControl?: () => void;
+  canControl?: boolean;
 }
 
 export const EpisodesList: React.FC<EpisodesListProps> = ({ 
@@ -24,7 +25,8 @@ export const EpisodesList: React.FC<EpisodesListProps> = ({
   isHost = true,
   onlyHostControls = false,
   partyCode = null,
-  onRequestControl
+  onRequestControl,
+  canControl = false
 }) => {
   const [selectedSeason, setSelectedSeason] = useState(currentSeason);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
@@ -32,7 +34,7 @@ export const EpisodesList: React.FC<EpisodesListProps> = ({
   const [lockedNotice, setLockedNotice] = useState(false);
   const navigate = useNavigate();
 
-  const isLockedForMember = Boolean(partyCode && onlyHostControls && !isHost);
+  const isLockedForMember = Boolean(partyCode && onlyHostControls && !canControl);
 
   useEffect(() => {
     let mounted = true;

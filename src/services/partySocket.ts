@@ -22,9 +22,12 @@ export interface RoomStatePayload {
   settings: {
     hostOnly: boolean;
     maxMembers: number;
+    controlGrantedTo?: string | null;
   };
   durationSeconds?: number | null;
   serverKey?: string | null;
+  version?: number;
+  updatedAt?: number;
 }
 
 export interface PlaybackStatePayload {
@@ -32,6 +35,15 @@ export interface PlaybackStatePayload {
   isPlaying: boolean;
   hostTime: number;
   hostUpdatedAt: number;
+  currentTime?: number;
+  duration?: number | null;
+  senderId?: string;
+  command?: string;
+  isHeartbeat?: boolean;
+  version?: number;
+  updatedAt?: number;
+  roomId?: string;
+  hostId?: string;
 }
 
 export interface ChatMessagePayload {
@@ -256,11 +268,13 @@ export class PartySocketClient {
   /**
    * Send standardized playback_command (play, pause, seek)
    */
-  public sendPlaybackCommand(command: 'play' | 'pause' | 'seek', time: number) {
+  public sendPlaybackCommand(command: 'play' | 'pause' | 'seek', time: number, isPlaying?: boolean, duration?: number) {
     return this.send({
       type: 'playback_command',
       command,
       time,
+      isPlaying,
+      duration,
       emitTime: Date.now()
     });
   }
@@ -268,15 +282,16 @@ export class PartySocketClient {
   /**
    * Start periodic host heartbeat for drift compensation and player sync
    */
-  public startHeartbeat(getState: () => { hostTime: number; isPlaying: boolean }, intervalMs = 2500) {
+  public startHeartbeat(getState: () => { hostTime: number; isPlaying: boolean; duration?: number }, intervalMs = 2500) {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.isConnected) {
-        const { hostTime, isPlaying } = getState();
+        const { hostTime, isPlaying, duration } = getState();
         this.send({
           type: 'heartbeat',
           hostTime,
           isPlaying,
+          duration,
           ts: Date.now()
         });
       }

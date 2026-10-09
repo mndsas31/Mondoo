@@ -17,7 +17,7 @@ export const SourceManager = () => {
   const [episode, setEpisode] = useState<number>(1);
   
   // New Source Form State
-  const [newKey, setNewKey] = useState(Object.keys(SERVERS)[1]); // Skip vidking (0)
+  const [newKey, setNewKey] = useState(Object.keys(SERVERS)[0] || 'vidstuck');
   const [newSource, setNewSource] = useState('');
   const [quality, setQuality] = useState('1080p');
   
@@ -104,7 +104,7 @@ export const SourceManager = () => {
               <form onSubmit={handleAdd} className="space-y-4 bg-black/40 p-4 rounded-lg border border-white/10">
                 <div className="flex gap-4">
                   <select value={newKey} onChange={e=>setNewKey(e.target.value)} className="bg-[#0A1428] border border-white/10 rounded p-2 text-white">
-                    {Object.entries(SERVERS).filter(([k]) => k !== 'vidking').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {Object.entries(SERVERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                   <input type="text" value={newSource} onChange={e=>setNewSource(e.target.value)} placeholder="File ID or https:// url" className="flex-1 bg-[#0A1428] border border-white/10 rounded p-2" required />
                   <select value={quality} onChange={e=>setQuality(e.target.value)} className="bg-[#0A1428] border border-white/10 rounded p-2 text-white">

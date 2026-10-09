@@ -16,38 +16,117 @@ export abstract class PlayerAdapter {
 export class Html5PlayerAdapter extends PlayerAdapter {
   private video: HTMLVideoElement | null = null;
   private onTimeUpdateCallback?: (time: number) => void;
+  private onEventCallback?: (event: { type: string; currentTime: number; duration?: number }) => void;
+  private playPromise: Promise<void> | null = null;
+  private pendingPause = false;
 
-  constructor(videoEl: HTMLVideoElement | null, onTimeUpdate?: (time: number) => void) {
+  constructor(
+    videoEl: HTMLVideoElement | null, 
+    onTimeUpdate?: (time: number) => void,
+    onEvent?: (event: { type: string; currentTime: number; duration?: number }) => void
+  ) {
     super();
     this.video = videoEl;
     this.onTimeUpdateCallback = onTimeUpdate;
+    this.onEventCallback = onEvent;
 
-    if (this.video && this.onTimeUpdateCallback) {
+    if (this.video) {
       this.video.addEventListener('timeupdate', this._handleTimeUpdate);
+      this.video.addEventListener('play', this._handlePlay);
+      this.video.addEventListener('pause', this._handlePause);
+      this.video.addEventListener('seeking', this._handleSeeking);
+      this.video.addEventListener('seeked', this._handleSeeked);
+      this.video.addEventListener('loadedmetadata', this._handleLoadedMetadata);
     }
   }
 
   private _handleTimeUpdate = () => {
-    if (this.video && this.onTimeUpdateCallback) {
-      this.onTimeUpdateCallback(this.video.currentTime);
+    if (this.video) {
+      this.onTimeUpdateCallback?.(this.video.currentTime);
+      this.onEventCallback?.({ type: 'timeupdate', currentTime: this.video.currentTime, duration: this.video.duration });
+    }
+  };
+
+  private _handlePlay = () => {
+    if (this.video) {
+      this.onEventCallback?.({ type: 'play', currentTime: this.video.currentTime, duration: this.video.duration });
+    }
+  };
+
+  private _handlePause = () => {
+    if (this.video) {
+      this.onEventCallback?.({ type: 'pause', currentTime: this.video.currentTime, duration: this.video.duration });
+    }
+  };
+
+  private _handleSeeking = () => {
+    if (this.video) {
+      this.onEventCallback?.({ type: 'seeking', currentTime: this.video.currentTime, duration: this.video.duration });
+    }
+  };
+
+  private _handleSeeked = () => {
+    if (this.video) {
+      this.onEventCallback?.({ type: 'seeked', currentTime: this.video.currentTime, duration: this.video.duration });
+    }
+  };
+
+  private _handleLoadedMetadata = () => {
+    if (this.video) {
+      this.onEventCallback?.({ type: 'loadedmetadata', currentTime: this.video.currentTime, duration: this.video.duration });
     }
   };
 
   play(): Promise<void> | void {
-    if (this.video) {
-      return this.video.play().catch(() => {});
+    if (!this.video) return;
+    this.pendingPause = false;
+
+    // Handle asynchronous video.play() correctly
+    try {
+      const promise = this.video.play();
+      if (promise !== undefined) {
+        this.playPromise = promise;
+        return promise.then(() => {
+          this.playPromise = null;
+          if (this.pendingPause && this.video) {
+            this.pendingPause = false;
+            this.video.pause();
+          }
+        }).catch((err: any) => {
+          this.playPromise = null;
+          // AbortError is normal when play() was superseded or paused
+          if (err?.name !== 'AbortError') {
+            console.warn('[Html5PlayerAdapter] Play prevented or failed:', err);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[Html5PlayerAdapter] Synchronous play error:', err);
     }
   }
 
   pause(): void {
-    if (this.video) {
-      this.video.pause();
+    if (!this.video) return;
+
+    if (this.playPromise) {
+      // If play() is still resolving, queue pause to execute when playPromise finishes
+      this.pendingPause = true;
+    } else {
+      this.pendingPause = false;
+      try {
+        this.video.pause();
+      } catch (err) {
+        console.warn('[Html5PlayerAdapter] Pause error:', err);
+      }
     }
   }
 
   seek(t: number): void {
     if (this.video && isFinite(t)) {
-      this.video.currentTime = Math.max(0, t);
+      const target = Math.max(0, t);
+      if (Math.abs(this.video.currentTime - target) > 0.3) {
+        this.video.currentTime = target;
+      }
     }
   }
 
@@ -60,10 +139,17 @@ export class Html5PlayerAdapter extends PlayerAdapter {
   }
 
   destroy(): void {
-    if (this.video && this.onTimeUpdateCallback) {
+    if (this.video) {
       this.video.removeEventListener('timeupdate', this._handleTimeUpdate);
+      this.video.removeEventListener('play', this._handlePlay);
+      this.video.removeEventListener('pause', this._handlePause);
+      this.video.removeEventListener('seeking', this._handleSeeking);
+      this.video.removeEventListener('seeked', this._handleSeeked);
+      this.video.removeEventListener('loadedmetadata', this._handleLoadedMetadata);
     }
     this.video = null;
+    this.playPromise = null;
+    this.pendingPause = false;
   }
 }
 

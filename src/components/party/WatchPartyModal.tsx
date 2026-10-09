@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, Check, Users, Play, LogIn, Shield, Sparkles, Share2, User, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '../../utils/cn';
 import { partyApi } from '../../services/partyApi';
 import type { Media } from '../../types';
 import { getStoredUserAvatar, getStoredUserColor } from '../../utils/partyAvatars';
@@ -217,55 +218,66 @@ export function WatchPartyModal({ isOpen, onClose, media, season, episode }: Wat
 
           {/* Centered Modal Container */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.94, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            exit={{ opacity: 0, scale: 0.94, y: 16 }}
+            transition={{ type: "spring", damping: 26, stiffness: 340 }}
             className="relative w-full max-w-md bg-[#0A1428]/95 border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(0,245,255,0.15)] overflow-hidden flex flex-col z-10 my-auto"
           >
             {/* Header */}
             <div className="p-4 border-b border-white/10 bg-slate-900/50 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
-              <Users className="w-4 h-4" />
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+                    Watch Party <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Real-Time</span>
+                  </h2>
+                  <p className="text-xs text-slate-400">Watch together with synchronized video & live chat</p>
+                </div>
+              </div>
+              <motion.button 
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose} 
+                className="p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </motion.button>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
-                Watch Party <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Real-Time</span>
-              </h2>
-              <p className="text-xs text-slate-400">Watch together with synchronized video & live chat</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
         
-        {/* Tab Toggle */}
-        <div className="flex border-b border-white/10 bg-slate-950/40">
-          <button 
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${tab === 'create' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setTab('create')}
-          >
-            Start Party
-          </button>
-          <button 
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${tab === 'join' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setTab('join')}
-          >
-            Join Party
-          </button>
-          <button 
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 ${tab === 'recent' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setTab('recent')}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Recent</span>
-            {recentParties.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
-                {recentParties.length}
-              </span>
-            )}
-          </button>
+        {/* Tab Toggle with Motion Segmented Pill */}
+        <div className="flex border-b border-white/10 bg-slate-950/60 p-1.5 gap-1.5 relative">
+          {(['create', 'join', 'recent'] as const).map((tabKey) => {
+            const isActive = tab === tabKey;
+            const label = tabKey === 'create' ? 'Start Party' : tabKey === 'join' ? 'Join Party' : 'Recent';
+            return (
+              <button
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
+                className={cn(
+                  "flex-1 py-2 text-xs font-bold transition-colors relative flex items-center justify-center gap-1.5 rounded-xl z-10 cursor-pointer",
+                  isActive ? "text-cyan-300" : "text-slate-400 hover:text-white"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="party-modal-tab-pill"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+                  />
+                )}
+                {tabKey === 'recent' && <Clock className="w-3.5 h-3.5" />}
+                <span>{label}</span>
+                {tabKey === 'recent' && recentParties.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
+                    {recentParties.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <div className="p-5 max-h-[calc(85vh-120px)] overflow-y-auto custom-scrollbar">
@@ -379,14 +391,16 @@ export function WatchPartyModal({ isOpen, onClose, media, season, episode }: Wat
                     />
                   </div>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleCreate}
                     disabled={isLoading}
-                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
+                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Play className="w-4 h-4 fill-white" />
                     {isLoading ? 'Creating Room...' : 'Start Watch Party'}
-                  </button>
+                  </motion.button>
                 </>
               ) : (
                 <div className="space-y-4 animate-in fade-in zoom-in duration-200">
@@ -399,33 +413,39 @@ export function WatchPartyModal({ isOpen, onClose, media, season, episode }: Wat
                     {/* Code Display Box with Copy */}
                     <div className="flex items-center justify-center gap-2 p-2 bg-slate-950/80 rounded-xl border border-cyan-500/30 my-2">
                       <span className="text-3xl font-mono font-extrabold tracking-widest text-cyan-400 px-3">{generatedCode}</span>
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => {
                           navigator.clipboard.writeText(generatedCode);
                           setCopied(true);
                           setTimeout(() => setCopied(false), 2000);
                         }}
-                        className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-xs font-bold transition-all border border-cyan-500/30 flex items-center gap-1"
+                        className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-xs font-bold transition-all border border-cyan-500/30 flex items-center gap-1 cursor-pointer"
                         title="Copy Code"
                       >
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copied ? 'Copied' : 'Copy Code'}</span>
-                      </button>
+                      </motion.button>
                     </div>
 
                     <p className="text-[11px] text-slate-400">Direct room link synchronizes video playback & live chat</p>
                   </div>
 
                   <div className="flex gap-2.5">
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={shareLink}
-                      className="flex-1 py-3 bg-white/10 hover:bg-white/15 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-white/10"
+                      className="flex-1 py-3 bg-white/10 hover:bg-white/15 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-white/10 cursor-pointer"
                     >
                       {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4 text-cyan-400" />}
                       <span>{copiedLink ? 'Link Copied!' : 'Share / Copy Link'}</span>
-                    </button>
+                    </motion.button>
                     
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         if (media && media.id) {
                           const mType = (media.media_type === 'tv' || (media as any).first_air_date) ? 'tv' : 'movie';
@@ -437,11 +457,11 @@ export function WatchPartyModal({ isOpen, onClose, media, season, episode }: Wat
                         }
                         onClose();
                       }}
-                      className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all"
+                      className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4" />
                       <span>Enter Watch Room</span>
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               )}
@@ -485,14 +505,16 @@ export function WatchPartyModal({ isOpen, onClose, media, season, episode }: Wat
                   />
                 </div>
 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   type="submit"
                   disabled={isLoading || code.length < 4}
                   className="w-full py-3 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
-                  {isLoading ? 'Connecting...' : 'Join Watch Party'}
-                </button>
+                  <span>{isLoading ? 'Connecting...' : 'Join Watch Party'}</span>
+                </motion.button>
               </form>
 
               {recentParties.length > 0 && (

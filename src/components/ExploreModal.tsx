@@ -142,21 +142,31 @@ export const ExploreModal: React.FC<ExploreModalProps> = ({ isOpen, onClose, tit
             </div>
 
             <div className="flex flex-wrap items-center justify-between px-6 py-3 bg-slate-900/40 border-b border-white/5 gap-4">
-              <div className="flex bg-slate-900/80 p-1 rounded-lg border border-white/5">
-                {(['all', 'movie', 'tv'] as FilterType[]).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setFilterType(tab)}
-                    className={cn(
-                      "px-3 sm:px-5 py-1.5 rounded-md text-xs sm:text-sm font-bold capitalize transition-all",
-                      filterType === tab 
-                        ? "bg-gradient-to-r from-[#00F5FF] to-[#8B5CF6] text-white shadow-lg" 
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    )}
-                  >
-                    {tab === 'all' ? 'All' : tab === 'movie' ? 'Movies' : 'TV Shows'}
-                  </button>
-                ))}
+              <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/10 relative">
+                {(['all', 'movie', 'tv'] as FilterType[]).map((tab) => {
+                  const isActive = filterType === tab;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setFilterType(tab)}
+                      className={cn(
+                        "relative px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold capitalize transition-colors cursor-pointer z-10",
+                        isActive 
+                          ? "text-white font-bold" 
+                          : "text-slate-400 hover:text-white"
+                      )}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="explore-filter-pill"
+                          className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.4)] -z-10"
+                          transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                        />
+                      )}
+                      <span>{tab === 'all' ? 'All' : tab === 'movie' ? 'Movies' : 'TV Shows'}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="flex items-center gap-2">
@@ -165,7 +175,7 @@ export const ExploreModal: React.FC<ExploreModalProps> = ({ isOpen, onClose, tit
                   <select 
                     value={sortOption}
                     onChange={(e) => setSortOption(e.target.value as SortType)}
-                    className="appearance-none bg-slate-900/80 border border-slate-700 text-white text-xs sm:text-sm rounded-lg focus:ring-[#00F5FF] focus:border-[#00F5FF] block pl-3 pr-8 py-2 outline-none cursor-pointer"
+                    className="appearance-none bg-slate-900/80 border border-slate-700 text-white text-xs sm:text-sm rounded-xl focus:ring-cyan-400 focus:border-cyan-400 block pl-3 pr-8 py-2 outline-none cursor-pointer"
                   >
                     <option value="default">Default</option>
                     <option value="rating">Highest Rated</option>

@@ -351,14 +351,24 @@ async function startServer() {
     }));
 
     // Standardized room_state snapshot (Server → Client)
+    const lastUpdate = new Date(party ? party.state_updated_at : now).getTime();
+    const elapsed = (party && party.is_playing) ? Math.max(0, (now - lastUpdate) / 1000) : 0;
+    const exactHostTime = (party ? (party.position_seconds || 0) : 0) + elapsed;
+
     ws.send(JSON.stringify({
       type: 'room_state',
       roomId: code,
       hostId: party ? party.host_user_id : '',
       mediaId: party ? String(party.media_id) : '',
+      mediaType: party ? party.media_type : 'movie',
+      title: party ? party.title : '',
+      season: party ? party.season : null,
+      episode: party ? party.episode : null,
+      serverKey: party ? party.server_key : null,
       isPlaying: party ? party.is_playing : false,
-      hostTime: party ? party.position_seconds : 0,
-      hostUpdatedAt: party ? new Date(party.state_updated_at).getTime() : Date.now(),
+      hostTime: exactHostTime,
+      hostUpdatedAt: now,
+      durationSeconds: party ? (party as any).duration_seconds || null : null,
       members: members.map(m => ({
         id: m.user_id,
         name: m.name,
@@ -368,9 +378,21 @@ async function startServer() {
       })),
       settings: {
         hostOnly: party ? (party.only_host_controls ?? true) : true,
+        controlGrantedTo: party ? (party.control_granted_to || null) : null,
+        controlRequests: party ? (party.control_requests || []) : [],
         maxMembers: 10
       }
     }));
+
+    if (party) {
+      ws.send(JSON.stringify({
+        type: 'playback_state',
+        isPlaying: party.is_playing,
+        hostTime: exactHostTime,
+        hostUpdatedAt: now,
+        duration: (party as any).duration_seconds || null
+      }));
+    }
 
     // Broadcast member update & join notification
     broadcastToRoom(code, {
@@ -426,6 +448,8 @@ async function startServer() {
               })),
               settings: {
                 hostOnly: party.only_host_controls ?? true,
+                controlGrantedTo: party.control_granted_to || null,
+                controlRequests: party.control_requests || [],
                 maxMembers: 10
               }
             }));
@@ -443,30 +467,49 @@ async function startServer() {
         // Schema 2: Standard playback_command (play, pause, seek)
         else if (data.type === 'playback_command') {
           if (!party) return;
-          if (party.only_host_controls && String(party.host_user_id) !== String(userId)) {
+          const isHost = String(party.host_user_id) === String(userId);
+          const isGranted = party.control_granted_to && String(party.control_granted_to) === String(userId);
+          const canControl = isHost || !party.only_host_controls || isGranted;
+          if (!canControl) {
             return;
           }
 
           if (data.command === 'play') {
             party.is_playing = true;
-            if (data.time !== undefined && isFinite(data.time)) party.position_seconds = data.time;
+            if (data.time !== undefined && isFinite(data.time)) party.position_seconds = Math.max(0, Number(data.time));
           } else if (data.command === 'pause') {
             party.is_playing = false;
-            if (data.time !== undefined && isFinite(data.time)) party.position_seconds = data.time;
+            if (data.time !== undefined && isFinite(data.time)) party.position_seconds = Math.max(0, Number(data.time));
           } else if (data.command === 'seek' && data.time !== undefined && isFinite(data.time)) {
-            party.position_seconds = data.time;
+            party.position_seconds = Math.max(0, Number(data.time));
+            if (data.isPlaying !== undefined) {
+              party.is_playing = !!data.isPlaying;
+            }
           }
 
-          party.state_updated_at = new Date().toISOString();
-          party.version += 1;
+          if (data.duration !== undefined && isFinite(data.duration) && data.duration > 0) {
+            (party as any).duration_seconds = Number(data.duration);
+          }
+
+          const now = Date.now();
+          party.state_updated_at = new Date(now).toISOString();
+          party.version = (party.version || 0) + 1;
           saveDb();
 
-          // Standard playback_state broadcast
+          // Standard authoritative playback_state broadcast
           broadcastToRoom(code, {
             type: 'playback_state',
+            roomId: code,
+            hostId: String(party.host_user_id),
             isPlaying: party.is_playing,
             hostTime: party.position_seconds,
-            hostUpdatedAt: Date.now()
+            currentTime: party.position_seconds,
+            hostUpdatedAt: now,
+            updatedAt: now,
+            version: party.version,
+            duration: (party as any).duration_seconds || null,
+            senderId: String(userId),
+            command: data.command
           });
 
           // Also broadcast legacy party:state
@@ -474,8 +517,10 @@ async function startServer() {
             type: 'party:state',
             state: {
               ...party,
+              duration_seconds: (party as any).duration_seconds || null,
               event_type: data.command,
-              server_time: Date.now()
+              server_time: now,
+              updated_at: now
             },
             trigger_user: userName
           });
@@ -484,13 +529,19 @@ async function startServer() {
         // Schema 3: Host Heartbeat & Drift Compensation
         else if (data.type === 'heartbeat') {
           if (!party) return;
-          // Only host emits authoritative heartbeats
-          if (String(party.host_user_id) === String(userId)) {
+          // Only host or authorized controller emits authoritative heartbeats
+          const isHost = String(party.host_user_id) === String(userId);
+          const isGranted = party.control_granted_to && String(party.control_granted_to) === String(userId);
+          const canControl = isHost || !party.only_host_controls || isGranted;
+          if (canControl) {
             if (data.hostTime !== undefined && isFinite(data.hostTime)) {
-              party.position_seconds = data.hostTime;
+              party.position_seconds = Math.max(0, Number(data.hostTime));
             }
             if (data.isPlaying !== undefined) {
               party.is_playing = !!data.isPlaying;
+            }
+            if (data.duration !== undefined && isFinite(data.duration) && data.duration > 0) {
+              (party as any).duration_seconds = Number(data.duration);
             }
             party.state_updated_at = new Date().toISOString();
 
@@ -499,7 +550,10 @@ async function startServer() {
               type: 'playback_state',
               isPlaying: party.is_playing,
               hostTime: party.position_seconds,
-              hostUpdatedAt: Date.now()
+              hostUpdatedAt: Date.now(),
+              duration: (party as any).duration_seconds || null,
+              isHeartbeat: true,
+              senderId: String(userId)
             }, ws);
           }
         }
@@ -800,7 +854,10 @@ async function startServer() {
         // Legacy: state_update
         else if (data.type === 'state_update') {
           if (!party) return;
-          if (party.only_host_controls && String(party.host_user_id) !== String(userId)) {
+          const isHost = String(party.host_user_id) === String(userId);
+          const isGranted = party.control_granted_to && String(party.control_granted_to) === String(userId);
+          const canControl = isHost || !party.only_host_controls || isGranted;
+          if (!canControl) {
             return;
           }
 
@@ -833,6 +890,7 @@ async function startServer() {
           if (data.state.episode !== undefined) party.episode = data.state.episode;
           if (data.state.server_key !== undefined) party.server_key = data.state.server_key;
 
+          const now = Date.now();
           saveDb();
 
           // Broadcast real-time playback state to all clients in room
@@ -840,18 +898,28 @@ async function startServer() {
             type: 'party:state',
             state: {
               ...party,
+              duration_seconds: (party as any).duration_seconds || null,
               event_type: data.state.event_type,
-              server_time: Date.now()
+              server_time: now,
+              updated_at: now
             },
             trigger_user: userName
-          }, ws);
+          });
 
           broadcastToRoom(code, {
             type: 'playback_state',
+            roomId: code,
+            hostId: String(party.host_user_id),
             isPlaying: party.is_playing,
             hostTime: party.position_seconds,
-            hostUpdatedAt: Date.now()
-          }, ws);
+            currentTime: party.position_seconds,
+            duration: (party as any).duration_seconds || null,
+            hostUpdatedAt: now,
+            updatedAt: now,
+            version: party.version,
+            senderId: String(userId),
+            command: data.state.event_type || (party.is_playing ? 'play' : 'pause')
+          });
 
           // Add system event for play/pause/seek
           if (data.state.event_type === 'pause') {
@@ -1005,6 +1073,17 @@ async function startServer() {
             if (member) {
               member.online = false;
               member.last_seen_at = new Date().toISOString();
+              
+              const party = db.parties[code];
+              if (party && String(party.control_granted_to) === String(userId)) {
+                party.control_granted_to = null;
+                broadcastToRoom(code, {
+                  type: 'control_granted',
+                  requesterId: null,
+                  ts: Date.now()
+                });
+              }
+
               saveDb();
               broadcastToRoom(code, {
                 type: 'party:members',
@@ -1180,6 +1259,8 @@ async function startServer() {
         version: 1,
         is_active: true,
         only_host_controls: onlyHost,
+        control_granted_to: null,
+        control_requests: [],
         created_at: new Date().toISOString(),
         ended_at: null
       };
@@ -1405,6 +1486,14 @@ async function startServer() {
       const member = db.party_members[code].find(m => String(m.user_id) === String(currentUserId));
       if (member) {
         member.online = false;
+        if (party && String(party.control_granted_to) === String(currentUserId)) {
+          party.control_granted_to = null;
+          broadcastToRoom(code, {
+            type: 'control_granted',
+            requesterId: null,
+            ts: Date.now()
+          });
+        }
         saveDb();
         broadcastToRoom(code, {
           type: 'party:members',
@@ -1496,6 +1585,10 @@ async function startServer() {
       created_at: new Date().toISOString()
     });
 
+    if (party && String(party.control_granted_to) === String(target_user_id)) {
+      party.control_granted_to = null;
+    }
+
     saveDb();
 
     // Broadcast kick to room
@@ -1519,10 +1612,13 @@ async function startServer() {
     if (!party) return res.status(404).json({ error: 'Party not found' });
 
     const user = getAuthUser(req);
-    const isHost = user && String(party.host_user_id) === String(user.id);
+    const userId = user ? String(user.id) : (req.headers['x-user-id'] as string || req.headers['x-guest-id'] as string);
+    const isHost = userId ? String(party.host_user_id) === String(userId) : false;
+    const isGranted = party.control_granted_to && userId && String(party.control_granted_to) === String(userId);
+    const canControl = isHost || !party.only_host_controls || isGranted;
 
-    if (party.only_host_controls && !isHost) {
-      return res.status(403).json({ error: 'Only the host has playback control in this room' });
+    if (!canControl) {
+      return res.status(403).json({ error: 'Only the host or granted user has playback control in this room' });
     }
 
     const { is_playing, position_seconds, season, episode, server_key, event_type, media_id, media_type, title, poster_path, duration_seconds } = req.body;
@@ -1541,7 +1637,8 @@ async function startServer() {
     if (duration_seconds !== undefined && duration_seconds !== null) {
       (party as any).duration_seconds = Number(duration_seconds);
     }
-    party.state_updated_at = new Date().toISOString();
+    const now = Date.now();
+    party.state_updated_at = new Date(now).toISOString();
     party.version += 1;
 
     saveDb();
@@ -1550,10 +1647,27 @@ async function startServer() {
       type: 'party:state',
       state: {
         ...party,
+        duration_seconds: (party as any).duration_seconds || null,
         event_type,
-        server_time: Date.now()
+        server_time: now,
+        updated_at: now
       },
       trigger_user: user ? user.username : 'Someone'
+    });
+
+    broadcastToRoom(code, {
+      type: 'playback_state',
+      roomId: code,
+      hostId: String(party.host_user_id),
+      isPlaying: party.is_playing,
+      hostTime: party.position_seconds,
+      currentTime: party.position_seconds,
+      hostUpdatedAt: now,
+      updatedAt: now,
+      version: party.version,
+      duration: (party as any).duration_seconds || null,
+      senderId: userId,
+      command: event_type || (party.is_playing ? 'play' : 'pause')
     });
 
     res.json({ success: true, server_time: Date.now(), version: party.version });
@@ -1572,10 +1686,16 @@ async function startServer() {
 
     if (req.body.only_host_controls !== undefined) {
       party.only_host_controls = !!req.body.only_host_controls;
+      party.control_granted_to = null; // Clear grant on settings change
       saveDb();
       broadcastToRoom(code, {
         type: 'party:settings',
         only_host_controls: party.only_host_controls
+      });
+      broadcastToRoom(code, {
+        type: 'control_granted',
+        requesterId: null,
+        ts: Date.now()
       });
     }
 
@@ -1610,6 +1730,7 @@ async function startServer() {
     party.host_user_id = newHostMember.user_id;
     party.host_name = newHostName;
     party.version = (party.version || 0) + 1;
+    party.control_granted_to = null; // Clear grant on host transfer
 
     members.forEach(m => {
       m.is_host = String(m.user_id) === String(newHostMember.user_id);
@@ -1659,16 +1780,32 @@ async function startServer() {
     const authUser = getAuthUser(req);
     const userId = req.body?.id || (authUser ? authUser.id : ((req.headers['x-user-id'] as string) || (req.headers['x-guest-id'] as string) || `guest-${Date.now()}`));
     const userName = req.body?.name || (authUser ? authUser.username : (req.headers['x-guest-name'] ? decodeURIComponent(req.headers['x-guest-name'] as string) : 'Guest'));
+    const userAvatar = req.body?.avatar || '🍿';
 
     if (!party.only_host_controls || String(party.host_user_id) === String(userId)) {
       return res.json({ success: true, granted: true, message: 'Controls are already open' });
+    }
+
+    if (!party.control_requests) {
+      party.control_requests = [];
+    }
+
+    const alreadyRequested = party.control_requests.some((r: any) => String(r.requesterId) === String(userId));
+    if (!alreadyRequested) {
+      party.control_requests.push({
+        requesterId: String(userId),
+        requesterName: userName,
+        requesterAvatar: userAvatar,
+        ts: Date.now()
+      });
+      saveDb();
     }
 
     broadcastToRoom(code, {
       type: 'control_requested',
       requesterId: String(userId),
       requesterName: userName,
-      requesterAvatar: req.body?.avatar || '🍿',
+      requesterAvatar: userAvatar,
       ts: Date.now()
     });
 
@@ -1707,14 +1844,15 @@ async function startServer() {
     const targetMember = db.party_members[code]?.find(m => String(m.user_id) === String(requester_id));
     const targetName = targetMember?.name || 'Viewer';
 
-    if (approved) {
-      party.only_host_controls = false;
-      saveDb();
+    // Remove from pending requests
+    if (party.control_requests) {
+      party.control_requests = party.control_requests.filter((r: any) => String(r.requesterId) !== String(requester_id));
+    }
 
-      broadcastToRoom(code, {
-        type: 'party:settings',
-        only_host_controls: false
-      });
+    if (approved) {
+      // Host-only controls stay true, but control is granted specifically to requester_id
+      party.control_granted_to = String(requester_id);
+      saveDb();
 
       broadcastToRoom(code, {
         type: 'control_granted',
@@ -1729,7 +1867,7 @@ async function startServer() {
         user_id: currentUserId,
         user_name: 'System',
         kind: 'system' as const,
-        body: `🎮 Host approved player control! Shared controls are now unlocked for ${targetName}.`,
+        body: `🎮 Host approved player control! Controls are now unlocked for ${targetName}.`,
         created_at: new Date().toISOString()
       };
       if (!db.party_messages[code]) db.party_messages[code] = [];
@@ -1737,8 +1875,13 @@ async function startServer() {
       saveDb();
       broadcastToRoom(code, { type: 'party:message', message: sysMsg });
 
-      return res.json({ success: true, approved: true, only_host_controls: false });
+      return res.json({ success: true, approved: true, only_host_controls: party.only_host_controls });
     } else {
+      if (String(party.control_granted_to) === String(requester_id)) {
+        party.control_granted_to = null;
+      }
+      saveDb();
+
       broadcastToRoom(code, {
         type: 'control_declined',
         requesterId: String(requester_id),
@@ -1759,7 +1902,7 @@ async function startServer() {
       saveDb();
       broadcastToRoom(code, { type: 'party:message', message: sysMsg });
 
-      return res.json({ success: true, approved: false, only_host_controls: true });
+      return res.json({ success: true, approved: false, only_host_controls: party.only_host_controls });
     }
   });
 
@@ -1804,17 +1947,24 @@ async function startServer() {
 
     const isUnchanged = party.version <= sinceVersion && newMessages.length === 0;
 
+    const lastUpdate = new Date(party.state_updated_at || now).getTime();
+    const elapsed = party.is_playing ? Math.max(0, (now - lastUpdate) / 1000) : 0;
+    const exactHostTime = (party.position_seconds || 0) + elapsed;
+
     res.json({
       unchanged: isUnchanged,
       version: party.version,
       state: {
         is_playing: party.is_playing,
-        position_seconds: party.position_seconds,
+        position_seconds: exactHostTime,
+        raw_position_seconds: party.position_seconds,
         state_updated_at: party.state_updated_at,
+        duration_seconds: (party as any).duration_seconds || null,
         season: party.season,
         episode: party.episode,
         server_key: party.server_key,
         only_host_controls: party.only_host_controls,
+        control_granted_to: party.control_granted_to || null,
         server_time: Date.now()
       },
       members,

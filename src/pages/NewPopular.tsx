@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { api, tmdbAxios } from '../services/tmdbApi';
 import { Media } from '../types';
 import { Row } from '../components/Row';
@@ -38,10 +39,18 @@ export const NewPopular: React.FC = () => {
   const openExplore = (title: string, endpoint: string, type: 'all'|'movie'|'tv' = 'all') => setExploreModal({ isOpen: true, title, endpoint, type });
 
   return (
-    <div className="pt-24 pb-20 px-4 md:px-12 lg:px-20">
-      <h1 className="text-3xl md:text-5xl font-black text-white mb-10 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-        New & Popular
-      </h1>
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.4 }}
+      className="pt-24 pb-20 px-4 md:px-12 lg:px-20"
+    >
+      <div className="flex items-center gap-3 mb-10">
+        <div className="w-2 h-8 bg-gradient-to-b from-cyan-400 via-sky-400 to-indigo-500 rounded-full shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
+        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+          New & Popular
+        </h1>
+      </div>
       
       <div className="space-y-16 lg:space-y-20">
         {loading ? (
@@ -57,6 +66,7 @@ export const NewPopular: React.FC = () => {
 
       {selectedItem && <Modal item={selectedItem} onClose={() => setSelectedItem(null)} />}
       <ExploreModal {...exploreModal} onClose={() => setExploreModal(prev => ({...prev, isOpen: false}))} />
-    </div>
+    </motion.div>
   );
 };
+

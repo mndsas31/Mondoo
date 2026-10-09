@@ -99,11 +99,7 @@ export const SettingsModal: React.FC = () => {
   ];
 
   const servers = [
-    { id: 'vidlink', label: 'VidLink (Ultra Fast)' },
-    { id: 'vidstuck', label: 'VidStuck (Multi-Host)' },
-    { id: 'vidsrc_cc', label: 'VidSrc v2' },
-    { id: 'embedsu', label: 'Embed.su (4K)' },
-    { id: 'autoembed', label: 'AutoEmbed' }
+    { id: 'vidstuck', label: 'VidStuck (Multi-Host HD)' }
   ];
 
   const qualities = [

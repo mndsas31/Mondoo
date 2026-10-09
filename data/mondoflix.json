@@ -38,10 +38,10 @@
       "state_updated_at": "2026-09-24T12:54:46.434Z",
       "server_key": null,
       "version": 1,
-      "is_active": true,
+      "is_active": false,
       "only_host_controls": true,
       "created_at": "2026-09-24T12:54:46.434Z",
-      "ended_at": null
+      "ended_at": "2026-10-08T13:00:19.571Z"
     },
     "RFB8K6": {
       "id": 1790255466581,
@@ -59,9 +59,32 @@
       "state_updated_at": "2026-09-24T13:11:06.581Z",
       "server_key": null,
       "version": 1,
-      "is_active": true,
+      "is_active": false,
       "only_host_controls": true,
       "created_at": "2026-09-24T13:11:06.581Z",
+      "ended_at": "2026-10-08T13:00:19.571Z"
+    },
+    "HPJ3RH": {
+      "id": 1791471921551,
+      "code": "HPJ3RH",
+      "host_user_id": "guest-1791471921551",
+      "host_name": "Party Host",
+      "media_id": 550,
+      "media_type": "movie",
+      "season": null,
+      "episode": null,
+      "title": "Fight Club",
+      "poster_path": null,
+      "is_playing": true,
+      "position_seconds": 125.4,
+      "state_updated_at": "2026-10-08T15:05:32.853Z",
+      "server_key": null,
+      "version": 3,
+      "is_active": true,
+      "only_host_controls": true,
+      "control_granted_to": null,
+      "control_requests": [],
+      "created_at": "2026-10-08T15:05:21.551Z",
       "ended_at": null
     }
   },
@@ -104,36 +127,56 @@
         "joined_at": "2026-09-24T13:11:06.581Z",
         "last_seen_at": "2026-09-24T13:11:06.581Z"
       }
+    ],
+    "HPJ3RH": [
+      {
+        "id": 1791471921551,
+        "user_id": "guest-1791471921551",
+        "name": "Party Host",
+        "avatar": "👑",
+        "color": "#06b6d4",
+        "is_host": true,
+        "online": true,
+        "joined_at": "2026-10-08T15:05:21.551Z",
+        "last_seen_at": "2026-10-08T15:05:21.551Z"
+      }
     ]
   },
   "party_messages": {
-    "VGLBSS": [
+    "HPJ3RH": [
       {
-        "id": 1790254486434,
-        "party_code": "VGLBSS",
-        "user_id": "anon-1790254486434",
+        "id": 1791471921551,
+        "party_code": "HPJ3RH",
+        "user_id": "guest-1791471921551",
         "user_name": "System",
         "kind": "system",
-        "body": "🎬 Watch Party started for Test Movie",
-        "created_at": "2026-09-24T12:54:46.434Z"
-      }
-    ],
-    "RFB8K6": [
-      {
-        "id": 1790255466581,
-        "party_code": "RFB8K6",
-        "user_id": "anon-1790255466581",
-        "user_name": "System",
-        "kind": "system",
-        "body": "🎬 Watch Party started for Test Watch Party",
-        "created_at": "2026-09-24T13:11:06.581Z"
+        "body": "🎬 Real-Time Watch Party started for Fight Club",
+        "created_at": "2026-10-08T15:05:21.551Z"
       }
     ]
   },
+  "party_blacklists": {},
   "watchlist": [],
-  "progress": [],
+  "progress": [
+    {
+      "id": 1791467019743,
+      "user_id": "guest-zaadiznmg",
+      "media_id": 969681,
+      "media_type": "movie",
+      "progress_seconds": 1,
+      "duration_seconds": 8700,
+      "title": "Spider-Man: Brand New Day",
+      "poster_path": "/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg",
+      "backdrop_path": "/subj7knTn4DeS6KS7qI66EQKe9i.jpg",
+      "overview": "Fighting crime full-time as Spider-Man in a world that doesn't remember him—and the pressure of seeing his old friends move on without him—sparks a change in Peter Parker he may not have the power to control. But that transformation might also be the only thing that can stop a shocking new threat to the city and those he loves - a powerful villain no one can even see.",
+      "last_watched": "2026-10-08T13:43:55.688Z"
+    }
+  ],
   "settings": {},
   "notifications": [],
   "search_history": [],
-  "sources": []
+  "sources": [],
+  "friends": [],
+  "friend_requests": [],
+  "direct_messages": []
 }

@@ -60,6 +60,8 @@ export interface WatchParty {
   version: number;
   is_active: boolean;
   only_host_controls?: boolean;
+  control_granted_to?: string | null;
+  control_requests?: Array<{ requesterId: string | number; requesterName: string; requesterAvatar?: string; ts: number }>;
   created_at: string;
   ended_at: string | null;
   duration_seconds?: number | null;

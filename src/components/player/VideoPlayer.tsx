@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Maximize, Minimize, Settings, AlertTriangle, MonitorPlay, RotateCcw, Gamepad2, Loader2, Check, X, Shield } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../utils/cn';
 import { Logo } from '../Logo';
 import { parseVidkingMessage } from '../../utils/vidking';
@@ -36,6 +37,7 @@ interface VideoPlayerProps {
   onDeclineControl?: (requesterId: string | number) => void;
   controlFeedback?: string | null;
   onDismissFeedback?: () => void;
+  canControl?: boolean;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
@@ -64,7 +66,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onGrantControl,
   onDeclineControl,
   controlFeedback = null,
-  onDismissFeedback
+  onDismissFeedback,
+  canControl = isHost || !onlyHostControls
 }) => {
   const [loaded, setLoaded] = useState(false);
   const [timeoutState, setTimeoutState] = useState<'none' | 'soft' | 'hard'>('none');
@@ -95,52 +98,71 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [activeSource?.server_key, onAdapterReady, embedUrl]);
 
-  // Handle external seek requests via postMessage adapter without triggering full page/iframe refresh
-  useEffect(() => {
-    if (seekTarget !== undefined && seekTarget !== null && adapterRef.current) {
-      adapterRef.current.seek(seekTarget);
-      if (!hostPaused) {
-        adapterRef.current.play();
-      }
-    }
-  }, [seekTarget, hostPaused]);
+  const prevHostPausedRef = useRef<boolean | null>(null);
+  const lastAppliedSeekRef = useRef<number | null>(null);
+  const hasInitialSyncedRef = useRef(false);
 
-  // Automated exact timestamp synchronization cadence upon joining an ongoing session
+  // Reset initial sync flag whenever embed URL changes
   useEffect(() => {
-    if (!partyCode || isHost || seekTarget === null || seekTarget === undefined) return;
+    hasInitialSyncedRef.current = false;
+    lastAppliedSeekRef.current = null;
+    prevHostPausedRef.current = null;
+  }, [embedUrl]);
+
+  // Handle external seek requests once without looping or resetting on pause/play toggles
+  useEffect(() => {
+    if (seekTarget === undefined || seekTarget === null || !adapterRef.current) return;
     
-    // Multi-phase sync attempts to reliably catch embed player across network and iframe init cadences
-    const cadences = [100, 400, 900, 1800, 3200, 5000];
-    const timers = cadences.map(ms => setTimeout(() => {
-      if (adapterRef.current) {
-        adapterRef.current.seek(seekTarget);
-        if (!hostPaused) {
-          adapterRef.current.play();
-        } else {
-          adapterRef.current.pause();
-        }
-      }
-    }, ms));
+    // Only apply if target differs significantly from last applied seek
+    if (lastAppliedSeekRef.current !== null && Math.abs(lastAppliedSeekRef.current - seekTarget) < 0.5) {
+      return;
+    }
+    lastAppliedSeekRef.current = seekTarget;
+    adapterRef.current.seek(seekTarget);
+  }, [seekTarget]);
 
-    return () => {
-      timers.forEach(t => clearTimeout(t));
-    };
-  }, [partyCode, isHost, seekTarget, hostPaused, embedUrl]);
-
-  // Handle host play/pause synchronization via postMessage adapter
+  // Handle play/pause state synchronization cleanly
   useEffect(() => {
     if (!adapterRef.current || !partyCode) return;
-    if (onlyHostControls && !isHost) {
-      if (hostPaused) {
-        adapterRef.current.pause();
-      } else {
-        if (seekTarget !== undefined && seekTarget !== null) {
-          adapterRef.current.seek(seekTarget);
-        }
-        adapterRef.current.play();
-      }
+    if (prevHostPausedRef.current === hostPaused) return;
+    prevHostPausedRef.current = hostPaused;
+
+    if (hostPaused) {
+      adapterRef.current.pause();
+    } else {
+      adapterRef.current.play();
     }
-  }, [hostPaused, isHost, onlyHostControls, partyCode, seekTarget]);
+  }, [hostPaused, partyCode]);
+
+  // Reliable single initial synchronization on load for late joiners
+  const performInitialSync = useRef(() => {
+    if (hasInitialSyncedRef.current || !partyCode || isHost || seekTarget === null || seekTarget === undefined) return;
+    hasInitialSyncedRef.current = true;
+    setTimeout(() => {
+      if (adapterRef.current) {
+        adapterRef.current.seek(seekTarget);
+        if (hostPaused) {
+          adapterRef.current.pause();
+        } else {
+          adapterRef.current.play();
+        }
+      }
+    }, 600);
+  });
+  performInitialSync.current = () => {
+    if (hasInitialSyncedRef.current || !partyCode || isHost || seekTarget === null || seekTarget === undefined) return;
+    hasInitialSyncedRef.current = true;
+    setTimeout(() => {
+      if (adapterRef.current) {
+        adapterRef.current.seek(seekTarget);
+        if (hostPaused) {
+          adapterRef.current.pause();
+        } else {
+          adapterRef.current.play();
+        }
+      }
+    }, 600);
+  };
 
   useEffect(() => {
     setLoaded(false);
@@ -181,11 +203,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                            origin.includes('vidking');
       if (isKnownEmbed) {
         setLoaded(true);
+        performInitialSync.current();
       }
       if (!isPlayerOrigin) return;
       const data = parseVidkingMessage(e);
       if (data) {
         setLoaded(true);
+        if (data.type === 'ready' || data.event === 'ready') {
+          performInitialSync.current();
+        }
         if (onPlayerEvent) onPlayerEvent(data);
       }
     };
@@ -311,7 +337,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <span className="font-bold tracking-wider uppercase text-xs sm:text-sm">Loading Player...</span>
               </div>
               <span className="text-[11px] sm:text-xs text-slate-400 mt-1.5">
-                Server: <span className="text-slate-200 font-semibold">{SERVERS[activeSource?.server_key || '']?.label || 'VidLink'}</span>
+                Server: <span className="text-slate-200 font-semibold">{SERVERS[activeSource?.server_key || '']?.label || 'VidStuck'}</span>
               </span>
               <div className="flex items-center gap-2.5 mt-3 sm:mt-4">
                 <button 
@@ -345,80 +371,107 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           frameBorder="0"
           referrerPolicy="no-referrer"
           loading="eager"
-          onLoad={() => setLoaded(true)}
+          onLoad={() => {
+            setLoaded(true);
+            performInitialSync.current();
+          }}
         />
 
         {/* Host Control Request Prompt Notification Banner */}
-        {isHost && pendingControlRequests && pendingControlRequests.length > 0 && (
-          <div className="absolute top-4 left-4 z-40 max-w-sm w-[calc(100%-2rem)] sm:w-auto bg-[#0A1428]/95 border border-cyan-500/50 rounded-2xl p-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-3 flex items-center justify-between gap-3 pointer-events-auto">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-sm shrink-0">
-                {pendingControlRequests[0].requesterAvatar || '🙋'}
+        <AnimatePresence>
+          {isHost && pendingControlRequests && pendingControlRequests.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="absolute top-4 left-4 z-40 max-w-sm w-[calc(100%-2rem)] sm:w-auto bg-[#070D18]/95 border border-cyan-500/40 rounded-2xl p-3 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 pointer-events-auto"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-sm shrink-0">
+                  {pendingControlRequests[0].requesterAvatar || '🙋'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">
+                    <span className="text-cyan-400">{pendingControlRequests[0].requesterName}</span> requested player control
+                  </p>
+                  <p className="text-[10px] text-slate-400">Unlock player controls for viewer?</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-white truncate">
-                  <span className="text-cyan-400">{pendingControlRequests[0].requesterName}</span> requested player control
-                </p>
-                <p className="text-[10px] text-slate-400">Grant control to unlock shared playback?</p>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onGrantControl?.(pendingControlRequests[0].requesterId)}
+                  className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1"
+                  title="Approve control request"
+                >
+                  <Check className="w-3.5 h-3.5" /> Grant
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => onDeclineControl?.(pendingControlRequests[0].requesterId)}
+                  className="p-1.5 bg-white/10 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-xl transition-colors cursor-pointer"
+                  title="Decline request"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </motion.button>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => onGrantControl?.(pendingControlRequests[0].requesterId)}
-                className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-extrabold text-xs rounded-lg transition-all shadow-md cursor-pointer flex items-center gap-1"
-                title="Approve control request"
-              >
-                <Check className="w-3.5 h-3.5" /> Grant
-              </button>
-              <button
-                onClick={() => onDeclineControl?.(pendingControlRequests[0].requesterId)}
-                className="p-1.5 bg-white/10 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg transition-colors cursor-pointer"
-                title="Decline request"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Member Feedback Toast */}
-        {controlFeedback && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[#0A1428]/95 border border-cyan-500/50 text-white px-4 py-2 rounded-full text-xs font-semibold shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 pointer-events-auto max-w-[90%]">
-            <span className="truncate">{controlFeedback}</span>
-            {onDismissFeedback && (
-              <button onClick={onDismissFeedback} className="text-slate-400 hover:text-white p-0.5 cursor-pointer">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+        <AnimatePresence>
+          {controlFeedback && (
+            <motion.div 
+              initial={{ opacity: 0, y: -15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[#070D18]/95 border border-cyan-500/40 text-white px-4 py-2 rounded-full text-xs font-semibold shadow-2xl backdrop-blur-xl flex items-center gap-2 pointer-events-auto max-w-[90%]"
+            >
+              <span className="truncate">{controlFeedback}</span>
+              {onDismissFeedback && (
+                <button onClick={onDismissFeedback} className="text-slate-400 hover:text-white p-0.5 cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Member Synced Floating Badge */}
-        {partyCode && onlyHostControls && !isHost && (
-          <div className="absolute bottom-3 left-4 z-20 pointer-events-none hidden sm:flex items-center gap-2 bg-[#0A1428]/85 border border-cyan-500/30 px-3 py-1.5 rounded-full backdrop-blur-md shadow-lg animate-in fade-in">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-            <span className="text-[11px] font-bold text-slate-200">Screen Synced with Host</span>
-          </div>
+        {partyCode && onlyHostControls && !canControl && (
+          <motion.div 
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute bottom-3 left-4 z-20 pointer-events-none hidden sm:flex items-center gap-2 bg-[#060D1A]/90 border border-cyan-500/30 px-3 py-1.5 rounded-full backdrop-blur-md shadow-lg"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+            <span className="text-[11px] font-semibold text-slate-200">Screen Synced with Host</span>
+          </motion.div>
         )}
 
         {/* Desktop Controls overlay */}
         <div 
-          className="hidden sm:flex absolute top-4 right-4 z-30 justify-end gap-2.5 pointer-events-none flex-wrap"
+          className="hidden sm:flex absolute top-4 right-4 z-30 justify-end gap-2 pointer-events-none flex-wrap"
         >
-          {partyCode && onlyHostControls && !isHost && (
+          {partyCode && onlyHostControls && !canControl && (
             <div className="flex items-center gap-1.5 pointer-events-auto">
-              <div className="h-10 px-3.5 flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full backdrop-blur-md text-xs font-bold">
+              <div className="h-10 px-3.5 flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-full backdrop-blur-md text-xs font-semibold">
                 <span>🔒 Host Controls</span>
               </div>
               {onRequestControl && (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={onRequestControl}
                   disabled={isControlRequestPending}
                   className={cn(
                     "h-10 px-3.5 flex items-center gap-1.5 rounded-full backdrop-blur-md text-xs font-bold transition-all border shadow-lg cursor-pointer",
                     isControlRequestPending
                       ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 opacity-80 cursor-wait"
-                      : "bg-cyan-500 hover:bg-cyan-400 text-black border-cyan-400 shadow-[0_0_15px_rgba(0,245,255,0.4)] active:scale-95"
+                      : "bg-cyan-500 hover:bg-cyan-400 text-black border-cyan-400 shadow-[0_0_15px_rgba(0,245,255,0.35)]"
                   )}
                   title="Request permission from host to control the player"
                 >
@@ -433,62 +486,70 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       <span>Request Control</span>
                     </>
                   )}
-                </button>
+                </motion.button>
               )}
             </div>
           )}
           {onPrevEpisode && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onPrevEpisode}
-              disabled={Boolean(partyCode && onlyHostControls && !isHost)}
+              disabled={Boolean(partyCode && onlyHostControls && !canControl)}
               className={cn(
-                "h-10 px-4 flex items-center justify-center bg-black/60 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 pointer-events-auto font-semibold text-sm",
-                partyCode && onlyHostControls && !isHost && "opacity-40 cursor-not-allowed hover:bg-black/60"
+                "h-10 px-4 flex items-center justify-center bg-black/70 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-md border border-white/10 pointer-events-auto font-semibold text-xs cursor-pointer",
+                partyCode && onlyHostControls && !canControl && "opacity-40 cursor-not-allowed hover:bg-black/70"
               )}
-              title={partyCode && onlyHostControls && !isHost ? "Host controls episode navigation" : "Previous Episode"}
+              title={partyCode && onlyHostControls && !canControl ? "Host controls episode navigation" : "Previous Episode"}
             >
               Prev Ep
-            </button>
+            </motion.button>
           )}
           {onNextEpisode && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onNextEpisode}
-              disabled={Boolean(partyCode && onlyHostControls && !isHost)}
+              disabled={Boolean(partyCode && onlyHostControls && !canControl)}
               className={cn(
-                "h-10 px-4 flex items-center justify-center bg-black/60 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 pointer-events-auto font-semibold text-sm",
-                partyCode && onlyHostControls && !isHost && "opacity-40 cursor-not-allowed hover:bg-black/60"
+                "h-10 px-4 flex items-center justify-center bg-black/70 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-md border border-white/10 pointer-events-auto font-semibold text-xs cursor-pointer",
+                partyCode && onlyHostControls && !canControl && "opacity-40 cursor-not-allowed hover:bg-black/70"
               )}
-              title={partyCode && onlyHostControls && !isHost ? "Host controls episode navigation" : "Next Episode"}
+              title={partyCode && onlyHostControls && !canControl ? "Host controls episode navigation" : "Next Episode"}
             >
               Next Ep
-            </button>
+            </motion.button>
           )}
           {sources && activeSource && onSelectSource && (
-            partyCode && onlyHostControls && !isHost ? (
+            partyCode && onlyHostControls && !canControl ? (
               <div 
-                className="h-10 px-3.5 flex items-center gap-1.5 bg-black/60 text-slate-400 border border-white/10 rounded-full backdrop-blur-sm text-xs font-semibold pointer-events-auto opacity-70"
+                className="h-10 px-3.5 flex items-center gap-1.5 bg-black/70 text-slate-300 border border-white/10 rounded-full backdrop-blur-md text-xs font-semibold pointer-events-auto opacity-70"
                 title="Server is managed by the party host"
               >
-                <span>Server: {SERVERS[activeSource.server_key]?.label || 'VidLink'}</span>
+                <span>Server: {SERVERS[activeSource.server_key]?.label || 'VidStuck'}</span>
               </div>
             ) : (
               <ServerButton sources={sources} activeSource={activeSource} onSelect={onSelectSource} />
             )
           )}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={toggleTheater}
-            className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 pointer-events-auto"
+            className="w-10 h-10 flex items-center justify-center bg-black/70 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-md border border-white/10 pointer-events-auto cursor-pointer"
             title={isTheater ? "Default View" : "Theater Mode"}
           >
-            <MonitorPlay className="w-5 h-5" />
-          </button>
-          <button
+            <MonitorPlay className="w-4 h-4 text-slate-200" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={toggleFullscreen}
-            className="w-10 h-10 flex items-center justify-center bg-black/60 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 pointer-events-auto"
+            className="w-10 h-10 flex items-center justify-center bg-black/70 hover:bg-[#00F5FF]/20 text-white rounded-full transition-colors backdrop-blur-md border border-white/10 pointer-events-auto cursor-pointer"
             title="Fullscreen"
           >
-            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-          </button>
+            {isFullscreen ? <Minimize className="w-4 h-4 text-slate-200" /> : <Maximize className="w-4 h-4 text-slate-200" />}
+          </motion.button>
         </div>
       </div>
 
@@ -496,28 +557,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       <div className="flex sm:hidden w-full px-3 py-2 bg-[#050A14] border-b border-white/10 items-center justify-between gap-1.5 z-20">
         <div className="flex items-center gap-1.5 min-w-0">
           {sources && activeSource && onSelectSource && (
-            partyCode && onlyHostControls && !isHost ? (
+            partyCode && onlyHostControls && !canControl ? (
               <div className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-full text-[11px] font-bold text-slate-300">
-                <span>{SERVERS[activeSource.server_key]?.label || 'VidLink'}</span>
+                <span>{SERVERS[activeSource.server_key]?.label || 'VidStuck'}</span>
               </div>
             ) : (
               <ServerButton sources={sources} activeSource={activeSource} onSelect={onSelectSource} compact={true} />
             )
           )}
-          {partyCode && onlyHostControls && !isHost && (
+          {partyCode && onlyHostControls && !canControl && (
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 Host Locked
               </span>
               {onRequestControl && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
                   onClick={onRequestControl}
                   disabled={isControlRequestPending}
                   className={cn(
-                    "px-2 py-1 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 border",
+                    "px-2.5 py-1 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 border cursor-pointer",
                     isControlRequestPending
                       ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                      : "bg-cyan-500 text-black font-extrabold border-cyan-400 active:scale-95 shadow-[0_0_8px_rgba(0,245,255,0.3)]"
+                      : "bg-cyan-500 text-black font-extrabold border-cyan-400 shadow-[0_0_8px_rgba(0,245,255,0.3)]"
                   )}
                 >
                   {isControlRequestPending ? (
@@ -531,7 +593,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       <span>Request</span>
                     </>
                   )}
-                </button>
+                </motion.button>
               )}
             </div>
           )}
@@ -539,36 +601,39 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
         <div className="flex items-center gap-1.5 shrink-0">
           {onPrevEpisode && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               onClick={onPrevEpisode}
-              disabled={Boolean(partyCode && onlyHostControls && !isHost)}
+              disabled={Boolean(partyCode && onlyHostControls && !canControl)}
               className={cn(
-                "h-9 px-3 flex items-center justify-center bg-white/5 active:bg-white/20 text-white rounded-full transition-colors border border-white/10 font-semibold text-xs touch-manipulation",
-                partyCode && onlyHostControls && !isHost && "opacity-40 cursor-not-allowed"
+                "h-9 px-3 flex items-center justify-center bg-white/5 active:bg-white/20 text-white rounded-full transition-colors border border-white/10 font-semibold text-xs touch-manipulation cursor-pointer",
+                partyCode && onlyHostControls && !canControl && "opacity-40 cursor-not-allowed"
               )}
             >
               Prev
-            </button>
+            </motion.button>
           )}
           {onNextEpisode && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               onClick={onNextEpisode}
-              disabled={Boolean(partyCode && onlyHostControls && !isHost)}
+              disabled={Boolean(partyCode && onlyHostControls && !canControl)}
               className={cn(
-                "h-9 px-3 flex items-center justify-center bg-white/5 active:bg-white/20 text-white rounded-full transition-colors border border-white/10 font-semibold text-xs touch-manipulation",
-                partyCode && onlyHostControls && !isHost && "opacity-40 cursor-not-allowed"
+                "h-9 px-3 flex items-center justify-center bg-white/5 active:bg-white/20 text-white rounded-full transition-colors border border-white/10 font-semibold text-xs touch-manipulation cursor-pointer",
+                partyCode && onlyHostControls && !canControl && "opacity-40 cursor-not-allowed"
               )}
             >
               Next
-            </button>
+            </motion.button>
           )}
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={toggleFullscreen}
-            className="w-9 h-9 flex items-center justify-center bg-white/5 active:bg-cyan-500/20 text-white rounded-full transition-colors border border-white/10 touch-manipulation"
+            className="w-9 h-9 flex items-center justify-center bg-white/5 active:bg-cyan-500/20 text-white rounded-full transition-colors border border-white/10 touch-manipulation cursor-pointer"
             title="Fullscreen"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>

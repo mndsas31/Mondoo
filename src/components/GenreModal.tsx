@@ -147,11 +147,9 @@ export const GenreModal: React.FC<GenreModalProps> = ({ isOpen, onClose, genre, 
             <div className="flex items-center gap-4 sm:gap-6">
               <Logo className="h-6 sm:h-8 hidden md:block" />
               <div className="h-8 w-px bg-white/10 hidden md:block"></div>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                {genre.name} 
-                <span className="text-xs font-bold uppercase tracking-widest text-[#00F5FF] bg-[#00F5FF]/10 px-2 py-1 rounded-md border border-[#00F5FF]/20">
-                  Genre
-                </span>
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+                <span>{genre.name}</span>
+                <span className="text-xs font-semibold text-cyan-400">· Category</span>
               </h2>
             </div>
             
@@ -163,31 +161,41 @@ export const GenreModal: React.FC<GenreModalProps> = ({ isOpen, onClose, genre, 
                   placeholder="Filter this genre..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-slate-900/50 border border-white/10 text-white text-sm rounded-full pl-9 pr-4 py-2 w-48 lg:w-64 focus:outline-none focus:border-[#00F5FF]/50 focus:ring-1 focus:ring-[#00F5FF]/50 transition-all"
+                  className="bg-slate-900/50 border border-white/10 text-white text-sm rounded-full pl-9 pr-4 py-2 w-48 lg:w-64 focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 transition-all"
                 />
               </div>
-              <button onClick={onClose} className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">
+              <button onClick={onClose} className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer">
                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between px-6 py-3 bg-slate-900/40 border-b border-white/5 gap-4">
-            <div className="flex bg-slate-900/80 p-1 rounded-lg border border-white/5">
-              {(['all', 'movie', 'tv'] as FilterType[]).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setFilterType(tab)}
-                  className={cn(
-                    "px-3 sm:px-5 py-1.5 rounded-md text-xs sm:text-sm font-bold capitalize transition-all",
-                    filterType === tab 
-                      ? "bg-gradient-to-r from-[#00F5FF] to-[#8B5CF6] text-white shadow-lg" 
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
-                  )}
-                >
-                  {tab === 'all' ? 'All' : tab === 'movie' ? 'Movies' : 'TV Shows'}
-                </button>
-              ))}
+            <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/10 relative">
+              {(['all', 'movie', 'tv'] as FilterType[]).map((tab) => {
+                const isActive = filterType === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setFilterType(tab)}
+                    className={cn(
+                      "relative px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold capitalize transition-colors cursor-pointer z-10",
+                      isActive 
+                        ? "text-white font-bold" 
+                        : "text-slate-400 hover:text-white"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="genre-filter-pill"
+                        className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg shadow-[0_0_12px_rgba(6,182,212,0.4)] -z-10"
+                        transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                      />
+                    )}
+                    <span>{tab === 'all' ? 'All' : tab === 'movie' ? 'Movies' : 'TV Shows'}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2">

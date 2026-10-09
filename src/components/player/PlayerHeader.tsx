@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ArrowLeft, Check, Plus, Settings, LogOut, User, Share2, Users, Copy, RefreshCw, Pause, Play, MessageSquare, Gamepad2, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { useWatchlist } from '../../context/WatchlistContext';
 import { Logo } from '../Logo';
@@ -13,7 +14,6 @@ const formatDuration = (secs: number) => {
   if (!secs || isNaN(secs)) return '';
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
   if (h > 0) {
     return `${h}h ${m}m`;
   }
@@ -88,7 +88,8 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     } catch (e) {
       console.error('Failed to copy', e);
     }
@@ -97,59 +98,72 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   return (
     <header
       className={cn(
-        "fixed top-0 left-0 right-0 h-16 z-50 flex items-center justify-between px-3 md:px-6 transition-all duration-500 gap-2",
-        "bg-gradient-to-b from-[#0A1428]/95 via-[#0A1428]/80 to-transparent backdrop-blur-md border-b border-white/5",
+        "fixed top-0 left-0 right-0 h-16 z-50 flex items-center justify-between px-3 md:px-6 transition-all duration-300 gap-2 select-none",
+        "bg-gradient-to-b from-[#050A14]/95 via-[#050A14]/85 to-transparent backdrop-blur-xl border-b border-white/5",
         isIdle ? "opacity-0 -translate-y-full pointer-events-none" : "opacity-100 translate-y-0 pointer-events-auto"
       )}
     >
-      {/* Left: Back & Logo */}
-      <div className="flex items-center gap-3">
-        <button
+      {/* Left: Back button & Logo */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => navigate(-1)}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/20 text-white transition-colors border border-white/10"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10 cursor-pointer shadow-sm shrink-0"
+          title="Go back"
         >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="hidden sm:block hover:scale-105 transition-transform cursor-pointer" onClick={() => navigate('/')}>
-          <Logo className="h-6" />
-        </div>
+          <ArrowLeft className="w-4 h-4 text-slate-200" />
+        </motion.button>
+        <Link 
+          to="/" 
+          className="cursor-pointer flex items-center group" 
+          title="MondoFlix - Go to Home Page"
+        >
+          <Logo className="h-6 sm:h-7" />
+        </Link>
       </div>
 
-      {/* Center: Title / WatchParty Session HUD */}
+      {/* Center: Title or WatchParty Session HUD */}
       <div className="flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2">
         {partyCode ? (
           /* Persistent WatchParty Session HUD Overlay */
-          <div className="flex items-center gap-1 sm:gap-2 bg-[#030712]/90 border border-cyan-500/40 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-[0_0_25px_rgba(0,245,255,0.25)] animate-in fade-in duration-300 max-w-full">
+          <motion.div 
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-1 sm:gap-2 bg-[#060D1A]/90 border border-cyan-500/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-[0_0_25px_rgba(0,245,255,0.18)] max-w-full backdrop-blur-md"
+          >
             {/* Live Indicator & Party Code */}
             <div className="flex items-center gap-1 sm:gap-1.5 pr-1.5 sm:pr-2 border-r border-white/10">
               <span className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-emerald-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]" />
               </span>
-              <span className="text-[10px] uppercase font-black text-cyan-400 tracking-wider hidden md:inline">Party</span>
+              <span className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider hidden md:inline">Party</span>
               <span className="font-mono font-bold text-white text-[11px] sm:text-xs tracking-wider">{partyCode}</span>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => {
                   navigator.clipboard.writeText(partyCode);
                   setCopiedCode(true);
                   setTimeout(() => setCopiedCode(false), 2000);
                 }}
-                className="p-1 hover:bg-white/10 text-cyan-300 rounded-md transition-colors"
+                className="p-1 hover:bg-white/10 text-cyan-300 rounded-md transition-colors cursor-pointer"
                 title="Copy Party Code"
               >
-                {copiedCode ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" /> : <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
-              </button>
+                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </motion.button>
             </div>
 
             {/* Member Count */}
             <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-slate-200 px-1 sm:px-2 border-r border-white/10" title="Connected Party Members">
-              <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
+              <Users className="w-3.5 h-3.5 text-cyan-400" />
               <span>{membersCount}</span>
             </div>
 
             {/* Duration Display */}
             {durationSeconds && durationSeconds > 0 && (
-              <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[10px] sm:text-[11px] font-bold text-slate-300 border-r border-white/10 mr-1">
+              <div className="hidden md:flex items-center gap-1 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-slate-300 border-r border-white/10 mr-0.5">
                 <span>{formatDuration(durationSeconds)}</span>
               </div>
             )}
@@ -158,42 +172,48 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
             <div className="flex items-center gap-1 sm:gap-2">
               {hostPaused ? (
                 (isHost || !onlyHostControls) && onTogglePause ? (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={onTogglePause}
-                    className="flex items-center gap-1 px-2.5 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-extrabold rounded-full text-[10px] sm:text-xs transition-all shadow-[0_0_12px_rgba(52,211,153,0.4)] cursor-pointer animate-pulse"
-                    title="Click to resume playback for everyone in the watch party"
+                    className="flex items-center gap-1 px-2.5 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold rounded-full text-[10px] sm:text-xs shadow-[0_0_15px_rgba(52,211,153,0.4)] cursor-pointer"
+                    title="Click to resume playback for everyone"
                   >
                     <Play className="w-3 h-3 fill-current" />
                     <span>Resume Party</span>
-                  </button>
+                  </motion.button>
                 ) : (
-                  <span className="text-[10px] sm:text-[11px] font-bold text-amber-400 flex items-center gap-1 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-amber-300 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                     <Pause className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400" /> <span className="hidden sm:inline">Host Paused</span>
                   </span>
                 )
               ) : driftSeconds > 3 ? (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={onResync}
-                  className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-[10px] sm:text-[11px] font-bold animate-bounce transition-all cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-full text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer"
                   title="Click to resync with host"
                 >
-                  <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3 animate-spin" />
+                  <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3 animate-spin text-rose-400" />
                   <span>Sync ({Math.round(driftSeconds)}s)</span>
-                </button>
+                </motion.button>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] sm:text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
                     <span className="hidden sm:inline">In Sync</span>
                   </span>
                   {(isHost || !onlyHostControls) && onTogglePause && (
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={onTogglePause}
                       className="p-1 hover:bg-white/10 text-slate-400 hover:text-amber-300 rounded-full transition-colors cursor-pointer"
                       title="Pause watch party for everyone"
                     >
                       <Pause className="w-3 h-3" />
-                    </button>
+                    </motion.button>
                   )}
                 </div>
               )}
@@ -202,20 +222,22 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
             {/* Host Controls Lock Badge & Request Control Button */}
             {onlyHostControls && !isHost && (
               <div className="flex items-center gap-1">
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold" title="Playback controlled exclusively by Host • Screen is Synced">
-                  <span>🔒 <span className="hidden sm:inline">Host Controls</span><span className="sm:hidden">Host</span></span>
-                </div>
+                <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 hidden sm:inline">
+                  Host Controls
+                </span>
                 {onRequestControl && (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={onRequestControl}
                     disabled={isControlRequestPending}
                     className={cn(
                       "px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold transition-all flex items-center gap-1 border cursor-pointer",
                       isControlRequestPending
                         ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 cursor-wait opacity-80"
-                        : "bg-cyan-500 hover:bg-cyan-400 text-black border-cyan-400 shadow-[0_0_12px_rgba(0,245,255,0.3)] active:scale-95"
+                        : "bg-cyan-500 hover:bg-cyan-400 text-black border-cyan-400 shadow-[0_0_12px_rgba(0,245,255,0.3)]"
                     )}
-                    title="Request control of the video player from the host"
+                    title="Request player control from host"
                   >
                     {isControlRequestPending ? (
                       <>
@@ -225,70 +247,79 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
                     ) : (
                       <>
                         <Gamepad2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-black" />
-                        <span>Request Control</span>
+                        <span>Control</span>
                       </>
                     )}
-                  </button>
+                  </motion.button>
                 )}
               </div>
             )}
 
             {/* Toggle Chat Sidebar Button */}
             {onToggleSidebar && (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={onToggleSidebar}
                 className={cn(
-                  "ml-0.5 sm:ml-1 p-1 sm:px-2.5 sm:py-1 rounded-full border transition-all flex items-center gap-1 text-[11px] sm:text-xs font-bold cursor-pointer",
+                  "ml-0.5 sm:ml-1 px-2.5 py-1 rounded-full border transition-all flex items-center gap-1 text-[11px] sm:text-xs font-semibold cursor-pointer",
                   showSidebar 
-                    ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(0,245,255,0.3)]"
-                    : "bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
+                    ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(0,245,255,0.25)]"
+                    : "bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/10"
                 )}
                 title={showSidebar ? "Hide Watch Party Sidebar" : "Open Watch Party Sidebar"}
               >
-                <MessageSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
-                <span className="hidden lg:inline">{showSidebar ? 'Hide Chat' : 'Chat'}</span>
-              </button>
+                <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden lg:inline">{showSidebar ? 'Hide' : 'Chat'}</span>
+              </motion.button>
             )}
 
-            {/* Direct Messages & Friends Modal Button */}
-            <button
+            {/* Friends Direct Message Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setDmOpen(true)}
-              className="ml-0.5 sm:ml-1 p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-bold cursor-pointer"
+              className="ml-0.5 sm:ml-1 p-1.5 sm:px-2.5 sm:py-1 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-semibold cursor-pointer"
               title="Friends & Direct Messages"
             >
-              <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
+              <Users className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden md:inline">Friends</span>
-            </button>
+            </motion.button>
 
             {/* End Party (Host) or Exit Party (Member) Button */}
             {isHost ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={onEndParty || onExitParty}
-                className="ml-0.5 sm:ml-1 p-1 sm:px-2.5 sm:py-1 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-500/60 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-bold shadow-[0_0_12px_rgba(239,68,68,0.4)] cursor-pointer"
-                title="End Watch Party for everyone and return to Home"
+                className="ml-0.5 sm:ml-1 px-2.5 py-1 rounded-full bg-red-600 hover:bg-red-500 text-white border border-red-500/60 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-bold shadow-[0_0_12px_rgba(239,68,68,0.35)] cursor-pointer"
+                title="End Watch Party for everyone"
               >
-                <LogOut className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                <span>End Party</span>
-              </button>
+                <LogOut className="w-3.5 h-3.5 text-white" />
+                <span>End</span>
+              </motion.button>
             ) : onExitParty ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={onExitParty}
-                className="ml-0.5 sm:ml-1 p-1 sm:px-2.5 sm:py-1 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 hover:border-rose-500/60 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-bold shadow-[0_0_10px_rgba(244,63,94,0.15)] cursor-pointer"
+                className="ml-0.5 sm:ml-1 px-2.5 py-1 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition-all flex items-center gap-1 text-[11px] sm:text-xs font-semibold cursor-pointer"
                 title="Exit Watch Party Session"
               >
-                <LogOut className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-400" />
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
                 <span className="hidden sm:inline">Exit</span>
-              </button>
+              </motion.button>
             ) : null}
-          </div>
+          </motion.div>
         ) : (
+          /* Normal Media Title Header (Unboxed Clean Typography) */
           <div className="flex flex-col items-center justify-center truncate max-w-full">
-            <h1 className="text-white font-bold text-xs sm:text-sm md:text-base truncate w-full text-center tracking-wide">
+            <h1 className="text-white font-bold text-xs sm:text-sm md:text-base truncate w-full text-center tracking-tight">
               {title}
             </h1>
             {season && episode && (
-              <span className="text-[10px] sm:text-[11px] font-semibold text-slate-300 truncate w-full text-center">
-                S{season} · E{episode} {episodeName ? `· ${episodeName}` : ''}
+              <span className="text-[11px] font-medium text-slate-400 truncate w-full text-center">
+                Season {season} · Episode {episode} {episodeName ? `· ${episodeName}` : ''}
               </span>
             )}
           </div>
@@ -305,59 +336,80 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
             onOpenSidebar={onToggleSidebar}
           />
         )}
-        <button
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={handleShare}
-          className="w-8 h-8 hidden sm:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/20 transition-colors text-white"
-          title="Share"
+          className="w-8 h-8 hidden sm:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/15 transition-colors text-slate-300 hover:text-white cursor-pointer"
+          title="Share link"
         >
           <Share2 className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={handleWatchlistClick}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all duration-300 border",
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-xs transition-all border cursor-pointer",
             inList
-              ? "bg-white/10 border-white/20 text-white hover:bg-white/20"
-              : "bg-gradient-to-r from-[#00F5FF]/10 to-[#8B5CF6]/10 border-[#00F5FF]/30 text-[#00F5FF] hover:border-[#00F5FF]"
+              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+              : "bg-cyan-500/10 border-cyan-500/30 text-cyan-300 hover:border-cyan-400"
           )}
         >
-          {inList ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          <span className="hidden md:inline">{inList ? 'Added' : 'Add'}</span>
-        </button>
+          {inList ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Plus className="w-3.5 h-3.5" />}
+          <span className="hidden md:inline">{inList ? 'Added' : 'Add to List'}</span>
+        </motion.button>
 
         {user ? (
           <div className="relative" ref={profileMenuRef}>
-            <div
-              className="flex items-center gap-2 cursor-pointer group"
+            <motion.div
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-indigo-500 rounded-full shadow-md flex items-center justify-center font-bold border border-white/20 text-black text-xs cursor-pointer select-none"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-[#00F5FF] to-[#8B5CF6] rounded-full shadow-md flex items-center justify-center font-bold border border-white/20 text-white text-xs">
-                {user.username.charAt(0).toUpperCase()}
-              </div>
-            </div>
+              {user.username.charAt(0).toUpperCase()}
+            </motion.div>
 
-            {showProfileMenu && (
-              <div className="absolute right-0 top-11 w-48 bg-[#0A1428]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="px-4 py-2 text-xs font-bold text-white border-b border-white/5 mb-1 truncate">
-                  {user.email}
-                </div>
-                <div className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 cursor-pointer text-xs text-slate-300 hover:text-white transition-colors" onClick={() => { openSettingsModal(); setShowProfileMenu(false); }}>
-                  <Settings className="w-3.5 h-3.5" /> Settings
-                </div>
-                <div className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 cursor-pointer text-xs text-red-400 hover:text-red-300 transition-colors" onClick={() => { logout(); setShowProfileMenu(false); }}>
-                  <LogOut className="w-3.5 h-3.5" /> Sign out
-                </div>
-              </div>
-            )}
+            <AnimatePresence>
+              {showProfileMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.94, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, y: 8 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                  className="absolute right-0 top-11 w-52 bg-[#0A1428]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl py-2 z-50 overflow-hidden"
+                >
+                  <div className="px-4 py-2 text-xs font-semibold text-slate-300 border-b border-white/5 mb-1 truncate">
+                    {user.email}
+                  </div>
+                  <button 
+                    className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center gap-3 cursor-pointer text-xs text-slate-300 hover:text-white transition-colors" 
+                    onClick={() => { openSettingsModal(); setShowProfileMenu(false); }}
+                  >
+                    <Settings className="w-3.5 h-3.5 text-cyan-400" /> Settings
+                  </button>
+                  <button 
+                    className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center gap-3 cursor-pointer text-xs text-rose-400 hover:text-rose-300 transition-colors" 
+                    onClick={() => { logout(); setShowProfileMenu(false); }}
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Sign out
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={openAuthModal}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/20 transition-colors text-white"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/15 transition-colors text-white cursor-pointer"
           >
             <User className="w-3.5 h-3.5" />
-          </button>
+          </motion.button>
         )}
       </div>
 

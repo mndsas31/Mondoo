@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Users } from 'lucide-react';
+import { motion } from 'motion/react';
 import { WatchPartyModal } from './WatchPartyModal';
 import type { Media } from '../../types';
 
@@ -23,14 +24,16 @@ export function WatchPartyButton({ media, season, episode, onOpenSidebar }: Watc
 
   return (
     <>
-      <button
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         onClick={handleClick}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-full font-bold text-xs transition-all shadow-md shadow-cyan-500/20 active:scale-95 cursor-pointer"
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-full font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
         title="Start or Join Watch Party"
       >
         <Users className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Watch Party</span>
-      </button>
+      </motion.button>
 
       {showPartyModal && !onOpenSidebar && (
         <WatchPartyModal

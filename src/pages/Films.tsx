@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { api, GENRES } from '../services/tmdbApi';
 import { Media } from '../types';
 import { Hero } from '../components/Hero';
@@ -40,7 +41,12 @@ export const Films: React.FC = () => {
   const openExplore = (title: string, endpoint: string) => setExploreModal({ isOpen: true, title, endpoint });
 
   return (
-    <div className="pb-20">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.4 }}
+      className="pb-20"
+    >
       <Hero onOpenModal={setSelectedMovie} />
       <div className="mt-[-150px] relative z-20 space-y-16 lg:space-y-20">
         {loading ? (
@@ -58,6 +64,7 @@ export const Films: React.FC = () => {
 
       {selectedMovie && <Modal item={selectedMovie} onClose={() => setSelectedMovie(null)} />}
       <ExploreModal {...exploreModal} type="movie" onClose={() => setExploreModal(prev => ({...prev, isOpen: false}))} />
-    </div>
+    </motion.div>
   );
 };
+

@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Plus, Check, MessageSquare, Info, ListVideo } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { api, getImageUrl } from '../services/tmdbApi';
 import { MediaDetails as MediaDetailsType, Cast, Media } from '../types';
 import { useWatchlist } from '../context/WatchlistContext';
 import { useWatchProgress } from '../hooks/useWatchProgress';
+import { useRecentlyWatched } from '../hooks/useRecentlyWatched';
 import { PlayerHeader } from '../components/player/PlayerHeader';
 import { VideoPlayer } from '../components/player/VideoPlayer';
 import { useIdleHide } from '../hooks/useIdleHide';
 import { useLocation } from 'react-router-dom';
-import { useWatchParty } from '../hooks/useWatchParty';
+import { useWatchParty, getUserIdentity } from '../hooks/useWatchParty';
 import { WatchPartySidebar } from '../components/party/WatchPartySidebar';
-import { PartyPanel } from '../components/party/PartyPanel';
 import { HostPausedOverlay } from '../components/party/HostPausedOverlay';
 import { AutoNextOverlay } from '../components/player/AutoNextOverlay';
 import { FloatingReactions } from '../components/party/FloatingReactions';
@@ -22,6 +23,7 @@ import { useAuth } from '../context/AuthContext';
 import { buildVidkingUrl } from '../utils/vidking';
 import { useSources } from '../hooks/useSources';
 import { SERVERS } from '../utils/servers';
+import { PlayerAdapter } from '../utils/playerAdapter';
 
 export const Watch: React.FC = () => {
   const { type, id, season, episode } = useParams<{ type: string; id: string; season?: string; episode?: string }>();
@@ -34,6 +36,7 @@ export const Watch: React.FC = () => {
   
   const { isInWatchlist } = useWatchlist();
   const { openAuthModal } = useAuth();
+  const { addRecentlyWatched } = useRecentlyWatched();
   
   const numId = Number(id);
   const numSeason = Number(season) || Number(sParam) || 1;
@@ -56,6 +59,7 @@ export const Watch: React.FC = () => {
   const [resyncProgress, setResyncProgress] = useState<number | null>(null);
   const [showSidebar, setShowSidebar] = useState(() => Boolean(partyCode));
   const [mobilePartyTab, setMobilePartyTab] = useState<'chat' | 'details' | 'episodes'>('chat');
+  const playerAdapterRef = useRef<PlayerAdapter | null>(null);
 
   const { sources, activeSource, setActiveSource, loading: sourcesLoading, nextSource } = useSources(
     type as any, 
@@ -67,18 +71,40 @@ export const Watch: React.FC = () => {
   const {
     party, members, messages, isHost, error: partyError, isConnected, hostPaused,
     publishState, togglePause, sendChatMessage, sendReaction, expectedHostPosition, checkDrift, driftSeconds,
-    floatingReactions, typingUsers, userAvatar, userColor, onlyHostControls,
+    floatingReactions, typingUsers, userAvatar, userColor, onlyHostControls, controlGrantedTo,
     controlRequests, myControlRequestPending, controlFeedback, clearControlFeedback,
     requestControl, grantControl, declineControl,
-    updatePartySettings, transferHost, setUserAvatar, setUserColor, sendTyping, sendMemberStatus, leaveParty, endParty, kickMember
+    updatePartySettings, transferHost, setUserAvatar, setUserColor, sendTyping, sendMemberStatus, leaveParty, endParty, kickMember,
+    forceResync
   } = useWatchParty({
     code: partyCode,
     onRequestResync: useCallback((seconds) => {
       // Set resync progress for smooth video playback synchronization
       setResyncProgress(prev => {
-        if (prev !== null && Math.abs(prev - seconds) < 1.5) return prev;
+        if (prev !== null && Math.abs(prev - seconds) < 1.0) return prev;
         return seconds;
       });
+      playerAdapterRef.current?.seek(seconds);
+    }, []),
+    onPlaybackAction: useCallback((action, time) => {
+      if (action === 'play') {
+        playerAdapterRef.current?.play();
+      } else if (action === 'pause') {
+        playerAdapterRef.current?.pause();
+      } else if (action === 'seek') {
+        playerAdapterRef.current?.seek(time);
+      }
+    }, []),
+    onPlaybackSync: useCallback(({ isPlaying, targetTime, isHeartbeat, drift }) => {
+      if (!isPlaying) {
+        playerAdapterRef.current?.pause();
+        playerAdapterRef.current?.seek(targetTime);
+      } else {
+        if (drift > 1.8 || !isHeartbeat) {
+          playerAdapterRef.current?.seek(targetTime);
+        }
+        playerAdapterRef.current?.play();
+      }
     }, []),
     onNavigateEpisode: useCallback((s, e) => {
       const targetUrl = `/watch/tv/${id}/season/${s}/episode/${e}${partyCode ? `?party=${partyCode}` : ''}`;
@@ -112,6 +138,9 @@ export const Watch: React.FC = () => {
     }, [])
   });
 
+  const myIdentity = getUserIdentity();
+  const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(myIdentity.id));
+
   const handleExitParty = useCallback(async () => {
     try {
       await leaveParty();
@@ -139,9 +168,10 @@ export const Watch: React.FC = () => {
   // Prevent repeated broadcast of the same media state
   const lastBroadcastKeyRef = useRef<string>('');
 
-  // Automatically broadcast movie/show changes if host is viewing a different title in the active watch party
+  // Automatically broadcast movie/show changes if user has control and is viewing a different title in the active watch party
   useEffect(() => {
-    if (!isHost || !party || !details || !partyCode) return;
+    if (!party || !details || !partyCode) return;
+    if (!canControl) return;
     const mediaType = type === 'tv' ? 'tv' : 'movie';
     const mediaTitle = details.title || details.name || 'Watch Party';
     
@@ -170,7 +200,7 @@ export const Watch: React.FC = () => {
         details.poster_path
       );
     }
-  }, [isHost, party?.media_id, party?.media_type, party?.season, party?.episode, numId, type, numSeason, numEpisode, details, partyCode, publishState, activeSource?.server_key]);
+  }, [canControl, party?.media_id, party?.media_type, party?.season, party?.episode, numId, type, numSeason, numEpisode, details, partyCode, publishState, activeSource?.server_key]);
 
   const { 
     initialProgress, 
@@ -303,6 +333,7 @@ export const Watch: React.FC = () => {
         const res = await api.getDetails(type as 'movie' | 'tv', numId);
         if (mounted) {
           setDetails(res.data);
+          addRecentlyWatched(res.data);
           setCast(res.data.credits?.cast || []);
           const similarItems = [...(res.data.similar?.results || []), ...(res.data.recommendations?.results || [])];
           setSimilar(Array.from(new Map(similarItems.map(item => [item.id, item])).values()));
@@ -342,8 +373,10 @@ export const Watch: React.FC = () => {
       const partyQuery = activePartyCode ? `?party=${activePartyCode}` : '';
       const targetUrl = `/watch/tv/${id}/season/${nextS}/episode/${nextE}${partyQuery}`;
 
-      // If user is host in watch party, broadcast new episode to all participants
-      if (activePartyCode && isHost) {
+      // If user is host or granted user in watch party, broadcast new episode to all participants
+      const myIdentity = getUserIdentity();
+      const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(myIdentity.id));
+      if (activePartyCode && canControl) {
         publishState(
           true,
           0,
@@ -410,7 +443,7 @@ export const Watch: React.FC = () => {
         hostPaused={hostPaused}
         isHost={isHost}
         onlyHostControls={onlyHostControls}
-        onResync={() => setResyncProgress(expectedHostPosition())}
+        onResync={() => forceResync()}
         showSidebar={showSidebar}
         onToggleSidebar={() => setShowSidebar(!showSidebar)}
         onExitParty={handleExitParty}
@@ -440,8 +473,12 @@ export const Watch: React.FC = () => {
                   onPrevEpisode={handlePrevEpisode}
                   onNextEpisode={handleNextEpisode}
                   seekTarget={resyncProgress}
+                  onAdapterReady={(adapter) => {
+                    playerAdapterRef.current = adapter;
+                  }}
                   isHost={isHost}
                   onlyHostControls={onlyHostControls}
+                  canControl={canControl}
                   partyCode={partyCode}
                   hostPaused={hostPaused}
                   onRequestControl={requestControl}
@@ -452,7 +489,8 @@ export const Watch: React.FC = () => {
                   controlFeedback={controlFeedback}
                   onDismissFeedback={clearControlFeedback}
                   onPlayerEvent={(evt) => {
-                    const canControl = isHost || !onlyHostControls;
+                    const myIdentity = getUserIdentity();
+                    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(myIdentity.id));
                     const durationFromEvent = evt.duration || evt.duration_seconds;
                     const runtimeInSeconds = details?.runtime ? details.runtime * 60 : null;
                     const finalDuration = durationFromEvent || runtimeInSeconds || progressDuration || 5400;
@@ -479,10 +517,14 @@ export const Watch: React.FC = () => {
                          checkDrift(evt.currentTime);
                       } else if (evt.type === 'pause' && !hostPaused) {
                          // Host is playing, but viewer paused locally: automatically resync and continue playback
-                         setResyncProgress(expectedHostPosition());
+                         playerAdapterRef.current?.play();
                       } else if ((evt.type === 'seeked' || evt.type === 'seeking') && onlyHostControls) {
-                         // Viewer attempted local seek while host controls: pull back to host position
-                         setResyncProgress(expectedHostPosition());
+                         // Viewer attempted local seek while host controls: pull back to host position only if drift > 2s
+                         const expected = expectedHostPosition();
+                         if (Math.abs(evt.currentTime - expected) > 2.0) {
+                           setResyncProgress(expected);
+                           playerAdapterRef.current?.seek(expected);
+                         }
                       }
                     }
 
@@ -517,14 +559,40 @@ export const Watch: React.FC = () => {
                   similarMedia={similar}
                   onSelectMedia={handleSelectSimilarMedia}
                 />
-                {hostPaused && (
+                {/* Guest/Member Paused Overlay (Only shown to members who do not control playback) */}
+                {hostPaused && !canControl && (
                   <HostPausedOverlay 
-                    onResync={() => setResyncProgress(expectedHostPosition())} 
+                    onResync={() => {
+                      forceResync();
+                    }} 
                     onRequestControl={requestControl}
                     isControlRequestPending={myControlRequestPending}
                     onTogglePause={togglePause}
-                    canControl={isHost || !onlyHostControls}
+                    canControl={false}
                   />
+                )}
+                {/* Non-intrusive Host Pause HUD Pill so host player is NEVER locked or obstructed */}
+                {hostPaused && canControl && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-[#070D18]/95 border border-amber-500/40 text-white px-4 py-2 rounded-full shadow-2xl backdrop-blur-xl pointer-events-auto"
+                  >
+                    <span className="flex items-center gap-1.5 text-amber-400 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      Paused for Room
+                    </span>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => togglePause()}
+                      className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-extrabold text-xs rounded-full flex items-center gap-1 shadow-md cursor-pointer transition-all"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Resume Playback</span>
+                    </motion.button>
+                  </motion.div>
                 )}
                 {hostServerWarning && (
                   <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-yellow-500/90 text-black px-4 py-2 rounded-full font-bold shadow-lg z-50">
@@ -537,38 +605,59 @@ export const Watch: React.FC = () => {
 
           {/* Mobile Watch Party Navigation Tabs (Only when Party is active on mobile) */}
           {partyCode && (
-            <div className="md:hidden flex items-center border-b border-white/10 bg-[#080E1A] sticky top-16 z-30 px-1">
+            <div className="md:hidden flex items-center border-b border-white/10 bg-[#080E1A]/95 backdrop-blur-md sticky top-16 z-30 p-1.5 gap-1">
               <button
                 onClick={() => setMobilePartyTab('chat')}
-                className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5 rounded-xl transition-colors relative z-10 cursor-pointer ${
                   mobilePartyTab === 'chat'
-                    ? "border-[#00F5FF] text-[#00F5FF] bg-cyan-500/10"
-                    : "border-transparent text-slate-400 hover:text-white"
+                    ? "text-cyan-300"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
+                {mobilePartyTab === 'chat' && (
+                  <motion.div
+                    layoutId="mobile-party-nav-pill"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+                  />
+                )}
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Chat ({messages.length})</span>
               </button>
               <button
                 onClick={() => setMobilePartyTab('details')}
-                className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5 rounded-xl transition-colors relative z-10 cursor-pointer ${
                   mobilePartyTab === 'details'
-                    ? "border-[#00F5FF] text-[#00F5FF] bg-cyan-500/10"
-                    : "border-transparent text-slate-400 hover:text-white"
+                    ? "text-cyan-300"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
+                {mobilePartyTab === 'details' && (
+                  <motion.div
+                    layoutId="mobile-party-nav-pill"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+                  />
+                )}
                 <Info className="w-3.5 h-3.5" />
                 <span>Overview</span>
               </button>
               {type === 'tv' && (
                 <button
                   onClick={() => setMobilePartyTab('episodes')}
-                  className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+                  className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5 rounded-xl transition-colors relative z-10 cursor-pointer ${
                     mobilePartyTab === 'episodes'
-                      ? "border-[#00F5FF] text-[#00F5FF] bg-cyan-500/10"
-                      : "border-transparent text-slate-400 hover:text-white"
+                      ? "text-cyan-300"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
+                  {mobilePartyTab === 'episodes' && (
+                    <motion.div
+                      layoutId="mobile-party-nav-pill"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                      className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+                    />
+                  )}
                   <ListVideo className="w-3.5 h-3.5" />
                   <span>Episodes</span>
                 </button>
@@ -604,7 +693,7 @@ export const Watch: React.FC = () => {
                 onSendMessage={sendChatMessage}
                 onSendReaction={sendReaction}
                 onSendTyping={sendTyping}
-                onResync={() => setResyncProgress(expectedHostPosition())}
+                onResync={() => forceResync()}
                 onKickMember={kickMember}
                 onUpdateSettings={updatePartySettings}
                 onTransferHost={transferHost}
@@ -654,6 +743,7 @@ export const Watch: React.FC = () => {
                       onlyHostControls={onlyHostControls}
                       partyCode={partyCode}
                       onRequestControl={requestControl}
+                      canControl={isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id))}
                     />
                   </div>
                 )}
@@ -678,58 +768,15 @@ export const Watch: React.FC = () => {
         </div>
 
         {/* Desktop Sticky Watch Party Sidebar */}
-        {showSidebar && (
-          <div className="hidden md:flex flex-col w-80 lg:w-96 border-l border-white/5 bg-[#050A14] flex-shrink-0 z-40 sticky top-16 h-[calc(100vh-64px)] overflow-hidden animate-in slide-in-from-right duration-300">
-            <WatchPartySidebar 
-              media={details}
-              season={numSeason}
-              episode={numEpisode}
-              party={party}
-              partyCode={partyCode}
-              members={members}
-              messages={messages}
-              isHost={isHost}
-              driftSeconds={driftSeconds}
-              hostPaused={hostPaused}
-              userAvatar={userAvatar}
-              userColor={userColor}
-              typingUsers={typingUsers}
-              onlyHostControls={onlyHostControls}
-              onRequestControl={requestControl}
-              isControlRequestPending={myControlRequestPending}
-              controlRequests={controlRequests}
-              onGrantControl={grantControl}
-              onDeclineControl={declineControl}
-              controlFeedback={controlFeedback}
-              onDismissFeedback={clearControlFeedback}
-              onClose={() => setShowSidebar(false)}
-              onSendMessage={sendChatMessage}
-              onSendReaction={sendReaction}
-              onSendTyping={sendTyping}
-              onResync={() => setResyncProgress(expectedHostPosition())}
-              onKickMember={kickMember}
-              onUpdateSettings={updatePartySettings}
-              onTransferHost={transferHost}
-              onSetAvatar={setUserAvatar}
-              onSetColor={setUserColor}
-              onLeave={handleExitParty}
-              onEndParty={handleEndParty}
-              onPartyCreated={(code) => {
-                let targetUrl = `/watch/${type || 'movie'}/${numId}`;
-                if (type === 'tv' && numSeason && numEpisode) {
-                  targetUrl += `/season/${numSeason}/episode/${numEpisode}`;
-                }
-                targetUrl += `?party=${code}`;
-                navigate(targetUrl);
-              }}
-            />
-          </div>
-        )}
-
-        {/* Mobile Setup / Party Sidebar Drawer when showSidebar is open on mobile and not in room */}
-        {!partyCode && showSidebar && (
-          <div className="md:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200">
-            <div className="w-full max-w-sm h-full bg-[#070E1B] animate-in slide-in-from-right duration-300">
+        <AnimatePresence>
+          {showSidebar && (
+            <motion.div 
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: "auto", opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              className="hidden md:flex flex-col w-80 lg:w-96 border-l border-white/5 bg-[#050A14] flex-shrink-0 z-40 sticky top-16 h-[calc(100vh-64px)] overflow-hidden"
+            >
               <WatchPartySidebar 
                 media={details}
                 season={numSeason}
@@ -756,7 +803,7 @@ export const Watch: React.FC = () => {
                 onSendMessage={sendChatMessage}
                 onSendReaction={sendReaction}
                 onSendTyping={sendTyping}
-                onResync={() => setResyncProgress(expectedHostPosition())}
+                onResync={() => forceResync()}
                 onKickMember={kickMember}
                 onUpdateSettings={updatePartySettings}
                 onTransferHost={transferHost}
@@ -765,7 +812,6 @@ export const Watch: React.FC = () => {
                 onLeave={handleExitParty}
                 onEndParty={handleEndParty}
                 onPartyCreated={(code) => {
-                  setShowSidebar(false);
                   let targetUrl = `/watch/${type || 'movie'}/${numId}`;
                   if (type === 'tv' && numSeason && numEpisode) {
                     targetUrl += `/season/${numSeason}/episode/${numEpisode}`;
@@ -774,9 +820,76 @@ export const Watch: React.FC = () => {
                   navigate(targetUrl);
                 }}
               />
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mobile Setup / Party Sidebar Drawer when showSidebar is open on mobile and not in room */}
+        <AnimatePresence>
+          {!partyCode && showSidebar && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSidebar(false)}
+              className="md:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-end"
+            >
+              <motion.div 
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm h-full bg-[#070E1B] shadow-2xl"
+              >
+                <WatchPartySidebar 
+                  media={details}
+                  season={numSeason}
+                  episode={numEpisode}
+                  party={party}
+                  partyCode={partyCode}
+                  members={members}
+                  messages={messages}
+                  isHost={isHost}
+                  driftSeconds={driftSeconds}
+                  hostPaused={hostPaused}
+                  userAvatar={userAvatar}
+                  userColor={userColor}
+                  typingUsers={typingUsers}
+                  onlyHostControls={onlyHostControls}
+                  onRequestControl={requestControl}
+                  isControlRequestPending={myControlRequestPending}
+                  controlRequests={controlRequests}
+                  onGrantControl={grantControl}
+                  onDeclineControl={declineControl}
+                  controlFeedback={controlFeedback}
+                  onDismissFeedback={clearControlFeedback}
+                  onClose={() => setShowSidebar(false)}
+                  onSendMessage={sendChatMessage}
+                  onSendReaction={sendReaction}
+                  onSendTyping={sendTyping}
+                  onResync={() => forceResync()}
+                  onKickMember={kickMember}
+                  onUpdateSettings={updatePartySettings}
+                  onTransferHost={transferHost}
+                  onSetAvatar={setUserAvatar}
+                  onSetColor={setUserColor}
+                  onLeave={handleExitParty}
+                  onEndParty={handleEndParty}
+                  onPartyCreated={(code) => {
+                    setShowSidebar(false);
+                    let targetUrl = `/watch/${type || 'movie'}/${numId}`;
+                    if (type === 'tv' && numSeason && numEpisode) {
+                      targetUrl += `/season/${numSeason}/episode/${numEpisode}`;
+                    }
+                    targetUrl += `?party=${code}`;
+                    navigate(targetUrl);
+                  }}
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

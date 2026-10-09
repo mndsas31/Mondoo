@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Search, Bell, User, Settings, LogOut, ChevronDown, Check, Users, Copy, X, Home, Tv, Film, Flame, Bookmark, MessageSquare } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils/cn';
 import { Logo } from './Logo';
 import { useAuth } from '../context/AuthContext';
@@ -121,7 +122,14 @@ export const Navbar: React.FC = () => {
       >
         {/* Left: Brand Logo & Mobile Party Indicator */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link to="/" className="hover:scale-105 transition-transform flex items-center">
+          <Link 
+            to="/" 
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="hover:scale-105 transition-transform flex items-center cursor-pointer" 
+            title="MondoFlix - Go to Home Page"
+          >
             <Logo className="h-7 sm:h-8 md:h-10" />
           </Link>
 
@@ -134,15 +142,49 @@ export const Navbar: React.FC = () => {
           )}
         </div>
 
-        {/* Center: Desktop Centered Navigation Links */}
-        <div className="hidden md:flex items-center justify-center gap-5 lg:gap-7 text-sm font-medium text-slate-300 absolute left-1/2 -translate-x-1/2">
-          <Link to="/" className={cn("hover:text-cyan-400 transition-colors", location.pathname === '/' && "text-cyan-400 font-bold")}>Home</Link>
-          <Link to="/series" className={cn("hover:text-cyan-400 transition-colors", location.pathname === '/series' && "text-cyan-400 font-bold")}>Series</Link>
-          <Link to="/films" className={cn("hover:text-cyan-400 transition-colors", location.pathname === '/films' && "text-cyan-400 font-bold")}>Films</Link>
-          <Link to="/new-and-popular" className={cn("hover:text-cyan-400 transition-colors", location.pathname === '/new-and-popular' && "text-cyan-400 font-bold")}>New & Popular</Link>
-          <button onClick={() => handleAuthAction(() => setMyListOpen(true))} className="hover:text-cyan-400 transition-colors whitespace-nowrap">My List</button>
+        {/* Center: Desktop Centered Navigation Links with Motion layout indicator */}
+        <div className="hidden md:flex items-center justify-center gap-6 lg:gap-8 text-sm font-medium text-slate-300 absolute left-1/2 -translate-x-1/2">
+          {[
+            { path: '/', label: 'Home' },
+            { path: '/series', label: 'Series' },
+            { path: '/films', label: 'Films' },
+            { path: '/new-and-popular', label: 'New & Popular' },
+          ].map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link 
+                key={item.path} 
+                to={item.path} 
+                className={cn(
+                  "relative py-1 transition-colors whitespace-nowrap",
+                  isActive ? "text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                <span>{item.label}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="navbar-active-pill"
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-sky-300 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.6)]"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+              </Link>
+            );
+          })}
+          
+          <button 
+            onClick={() => handleAuthAction(() => setMyListOpen(true))} 
+            className="relative py-1 text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            My List
+          </button>
+
           {activePartyCode ? (
-            <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-950/90 to-indigo-950/90 py-1 pl-3 pr-2 rounded-full border border-cyan-400/50 shadow-[0_0_20px_rgba(0,245,255,0.25)]">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-950/90 to-indigo-950/90 py-1 pl-3 pr-2 rounded-full border border-cyan-400/50 shadow-[0_0_20px_rgba(0,245,255,0.25)]"
+            >
               <button 
                 onClick={() => handleAuthAction(() => setWatchPartyOpen(true))} 
                 className="flex items-center gap-1.5 text-cyan-300 hover:text-white font-bold text-xs cursor-pointer"
@@ -183,199 +225,216 @@ export const Navbar: React.FC = () => {
               >
                 <X className="w-3.5 h-3.5" />
               </button>
-            </div>
+            </motion.div>
           ) : (
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => handleAuthAction(() => setWatchPartyOpen(true))} 
-              className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-semibold transition-colors bg-cyan-500/10 px-3.5 py-1.5 rounded-full border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-500/50 shadow-[0_0_15px_rgba(0,245,255,0.15)] whitespace-nowrap"
+              className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-semibold transition-colors bg-cyan-500/10 px-3.5 py-1.5 rounded-full border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-500/50 shadow-[0_0_15px_rgba(0,245,255,0.15)] whitespace-nowrap cursor-pointer text-xs"
             >
               <Users className="w-3.5 h-3.5 text-cyan-400" />
               Watch Party
-            </button>
+            </motion.button>
           )}
         </div>
 
         {/* Right: Search, Messages, Notifications, Profile */}
-        <div className="flex items-center gap-2 sm:gap-4 md:gap-6 text-white">
-          <button 
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 text-white">
+          <motion.button 
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => setSearchOpen(true)}
-            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-slate-800 transition-colors touch-manipulation cursor-pointer"
+            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-slate-800/60 transition-colors touch-manipulation cursor-pointer border border-transparent hover:border-white/10"
             title="Search movies and series"
           >
             <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 hover:text-cyan-400 transition-colors" />
-          </button>
+          </motion.button>
 
           {/* Direct Messages & Friends */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => setDmOpen(true)}
-            className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-slate-800 transition-colors touch-manipulation cursor-pointer"
+            className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-slate-800/60 transition-colors touch-manipulation cursor-pointer border border-transparent hover:border-white/10"
             title="Friends & Direct Messages"
           >
             <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 hover:text-cyan-400 transition-colors" />
-          </button>
+          </motion.button>
 
           {/* Notifications */}
           <div ref={notifRef} className="relative">
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               onClick={() => handleAuthAction(() => setShowNotifications(!showNotifications))}
-              className="relative p-2 touch-manipulation"
+              className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-slate-800/60 transition-colors touch-manipulation cursor-pointer border border-transparent hover:border-white/10"
               title="Notifications"
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 hover:text-cyan-400 cursor-pointer transition-colors" />
               {notifications.filter(n => !n.is_read).length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0A1428]"></span>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-cyan-400 rounded-full ring-2 ring-[#0A1428] shadow-[0_0_8px_#22d3ee]"></span>
               )}
-            </button>
+            </motion.button>
             
-            {showNotifications && user && (
-              <div className="fixed sm:absolute top-14 sm:top-12 left-4 right-4 sm:left-auto sm:right-0 sm:w-80 bg-slate-900/98 backdrop-blur-xl border border-slate-700/60 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh] sm:max-h-[400px] z-50 animate-in fade-in zoom-in-95">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                  <h3 className="font-bold text-white text-sm">Notifications</h3>
-                  {notifications.some(n => !n.is_read) && (
-                    <button onClick={markAllAsRead} className="text-xs text-cyan-400 hover:text-cyan-300">
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-                <div className="overflow-y-auto">
-                  {notifications.length > 0 ? (
-                    notifications.map(notif => {
-                      const codeMatch = notif.message.match(/Join room:\s*([A-Z0-9]{6})/i) || notif.message.match(/room:\s*([A-Z0-9]{6})/i) || notif.message.match(/Code:\s*([A-Z0-9]{6})/i);
-                      const roomCode = codeMatch ? codeMatch[1].toUpperCase() : null;
+            <AnimatePresence>
+              {showNotifications && user && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                  className="fixed sm:absolute top-14 sm:top-12 left-4 right-4 sm:left-auto sm:right-0 sm:w-80 bg-slate-900/98 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[70vh] sm:max-h-[400px] z-50"
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02]">
+                    <h3 className="font-semibold text-white text-sm">Notifications</h3>
+                    {notifications.some(n => !n.is_read) && (
+                      <button onClick={markAllAsRead} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer">
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      notifications.map(notif => {
+                        const codeMatch = notif.message.match(/Join room:\s*([A-Z0-9]{6})/i) || notif.message.match(/room:\s*([A-Z0-9]{6})/i) || notif.message.match(/Code:\s*([A-Z0-9]{6})/i);
+                        const roomCode = codeMatch ? codeMatch[1].toUpperCase() : null;
 
-                      return (
-                        <div 
-                          key={notif.id} 
-                          className={cn(
-                            "p-4 border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors flex gap-3 cursor-pointer",
-                            !notif.is_read ? "bg-slate-800/30" : ""
-                          )}
-                          onClick={() => markAsRead(notif.id)}
-                        >
-                          {!notif.is_read && <div className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0"></div>}
-                          <div className="flex-1 min-w-0">
-                            <h4 className={cn("text-sm mb-1 truncate", !notif.is_read ? "font-bold text-white" : "font-medium text-slate-300")}>{notif.title}</h4>
-                            <p className="text-xs text-slate-400 leading-relaxed break-words">{notif.message}</p>
-                            
-                            {roomCode && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markAsRead(notif.id);
-                                  setShowNotifications(false);
-                                  navigate(`/watch?party=${roomCode}`);
-                                }}
-                                className="mt-2.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-[11px] rounded-lg shadow-[0_0_12px_rgba(0,245,255,0.3)] transition-all cursor-pointer flex items-center gap-1 w-fit"
-                              >
-                                <Users className="w-3.5 h-3.5 animate-pulse" />
-                                <span>Join Watch Party</span>
-                              </button>
+                        return (
+                          <div 
+                            key={notif.id} 
+                            className={cn(
+                              "p-4 border-b border-white/5 hover:bg-white/[0.04] transition-colors flex gap-3 cursor-pointer",
+                              !notif.is_read ? "bg-cyan-500/[0.06]" : ""
                             )}
+                            onClick={() => markAsRead(notif.id)}
+                          >
+                            {!notif.is_read && <div className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0 shadow-[0_0_6px_#22d3ee]"></div>}
+                            <div className="flex-1 min-w-0">
+                              <h4 className={cn("text-sm mb-1 truncate", !notif.is_read ? "font-bold text-white" : "font-medium text-slate-300")}>{notif.title}</h4>
+                              <p className="text-xs text-slate-400 leading-relaxed break-words">{notif.message}</p>
+                              
+                              {roomCode && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsRead(notif.id);
+                                    setShowNotifications(false);
+                                    navigate(`/watch?party=${roomCode}`);
+                                  }}
+                                  className="mt-2.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-[11px] rounded-lg shadow-[0_0_12px_rgba(0,245,255,0.3)] transition-all cursor-pointer flex items-center gap-1 w-fit"
+                                >
+                                  <Users className="w-3.5 h-3.5 animate-pulse" />
+                                  <span>Join Watch Party</span>
+                                </button>
+                              )}
 
-                            <span className="text-[10px] text-slate-500 mt-2 block">
-                              {new Date(notif.created_at).toLocaleDateString()}
-                            </span>
+                              <span className="text-[10px] text-slate-500 mt-2 block font-mono">
+                                {new Date(notif.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="p-8 text-center text-slate-400 text-sm">No new notifications</div>
-                  )}
-                </div>
-              </div>
-            )}
+                        );
+                      })
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 text-sm">No new notifications</div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
           {user ? (
             <div className="relative" ref={userMenuRef}>
-              <div 
+              <motion.div 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 className="flex items-center gap-1.5 cursor-pointer touch-manipulation"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-[#00F5FF] to-[#8B5CF6] rounded-full shadow-md flex items-center justify-center font-bold text-xs text-black">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-violet-600 rounded-full shadow-md flex items-center justify-center font-bold text-xs text-black">
                   {user.username.charAt(0).toUpperCase()}
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-300 ${userMenuOpen ? 'rotate-180' : ''}`} />
-              </div>
+              </motion.div>
               
-              {userMenuOpen && (
-                <div className="absolute right-0 top-11 w-48 bg-slate-900/98 backdrop-blur-xl border border-slate-700/60 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95">
-                  <div className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-slate-200">
-                    <User className="w-4 h-4 text-cyan-400" /> {user.username}
-                  </div>
-                  <div 
-                    className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-slate-200 cursor-pointer" 
-                    onClick={() => { setUserMenuOpen(false); openSettingsModal(); }}
+              <AnimatePresence>
+                {userMenuOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                    transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                    className="absolute right-0 top-11 w-48 bg-slate-900/98 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl py-2 z-50 overflow-hidden"
                   >
-                    <Settings className="w-4 h-4 text-slate-400" /> Settings
-                  </div>
-                  <div className="border-t border-slate-800 my-1"></div>
-                  <div 
-                    className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-rose-400 cursor-pointer" 
-                    onClick={() => { setUserMenuOpen(false); logout(); }}
-                  >
-                    <LogOut className="w-4 h-4" /> Sign out
-                  </div>
-                </div>
-              )}
+                    <div className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-slate-200">
+                      <User className="w-4 h-4 text-cyan-400" /> {user.username}
+                    </div>
+                    <div 
+                      className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-slate-200 cursor-pointer" 
+                      onClick={() => { setUserMenuOpen(false); openSettingsModal(); }}
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" /> Settings
+                    </div>
+                    <div className="border-t border-white/10 my-1"></div>
+                    <div 
+                      className="px-4 py-2 hover:bg-white/5 flex items-center gap-3 text-sm text-rose-400 cursor-pointer" 
+                      onClick={() => { setUserMenuOpen(false); logout(); }}
+                    >
+                      <LogOut className="w-4 h-4" /> Sign out
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={openAuthModal}
-              className="bg-gradient-to-r from-[#00F5FF] to-[#8B5CF6] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)] text-black font-bold px-4 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs sm:text-sm transition-all duration-300 touch-manipulation"
+              className="bg-gradient-to-r from-cyan-400 to-violet-600 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] text-black font-extrabold px-4 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs sm:text-sm transition-all duration-300 touch-manipulation cursor-pointer"
             >
               Sign In
-            </button>
+            </motion.button>
           )}
         </div>
       </nav>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#070D18]/95 backdrop-blur-2xl border-t border-white/10 px-2 py-1.5 flex items-center justify-around pb-[max(0.6rem,env(safe-area-inset-bottom))] shadow-2xl">
-        <Link 
-          to="/" 
-          className={cn(
-            "flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors touch-manipulation",
-            location.pathname === '/' ? "text-[#00F5FF]" : "text-slate-400 hover:text-white"
-          )}
-        >
-          <Home className="w-5 h-5" />
-          <span>Home</span>
-        </Link>
-        <Link 
-          to="/series" 
-          className={cn(
-            "flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors touch-manipulation",
-            location.pathname === '/series' ? "text-[#00F5FF]" : "text-slate-400 hover:text-white"
-          )}
-        >
-          <Tv className="w-5 h-5" />
-          <span>Series</span>
-        </Link>
-        <Link 
-          to="/films" 
-          className={cn(
-            "flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors touch-manipulation",
-            location.pathname === '/films' ? "text-[#00F5FF]" : "text-slate-400 hover:text-white"
-          )}
-        >
-          <Film className="w-5 h-5" />
-          <span>Films</span>
-        </Link>
-        <Link 
-          to="/new-and-popular" 
-          className={cn(
-            "flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors touch-manipulation",
-            location.pathname === '/new-and-popular' ? "text-[#00F5FF]" : "text-slate-400 hover:text-white"
-          )}
-        >
-          <Flame className="w-5 h-5" />
-          <span>Popular</span>
-        </Link>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#070D18]/90 backdrop-blur-2xl border-t border-white/10 px-2 py-1.5 flex items-center justify-around pb-[max(0.6rem,env(safe-area-inset-bottom))] shadow-2xl">
+        {[
+          { path: '/', label: 'Home', icon: Home },
+          { path: '/series', label: 'Series', icon: Tv },
+          { path: '/films', label: 'Films', icon: Film },
+          { path: '/new-and-popular', label: 'Popular', icon: Flame },
+        ].map((tab) => {
+          const isActive = location.pathname === tab.path;
+          const Icon = tab.icon;
+          return (
+            <Link 
+              key={tab.path}
+              to={tab.path} 
+              className={cn(
+                "relative flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-semibold transition-colors touch-manipulation",
+                isActive ? "text-cyan-400 font-bold" : "text-slate-400 hover:text-white"
+              )}
+            >
+              <Icon className={cn("w-5 h-5 transition-transform", isActive ? "scale-110 text-cyan-400" : "")} />
+              <span>{tab.label}</span>
+              {isActive && (
+                <motion.div
+                  layoutId="mobile-nav-indicator"
+                  className="absolute -bottom-0.5 w-1 h-1 bg-cyan-400 rounded-full shadow-[0_0_6px_#22d3ee]"
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                />
+              )}
+            </Link>
+          );
+        })}
         <button 
           onClick={() => handleAuthAction(() => setMyListOpen(true))}
-          className="flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-white transition-colors touch-manipulation"
+          className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-[10px] font-semibold text-slate-400 hover:text-white transition-colors touch-manipulation cursor-pointer active:scale-95"
         >
           <Bookmark className="w-5 h-5" />
           <span>My List</span>

@@ -77,54 +77,71 @@ export const Hero: React.FC<HeroProps> = ({ onOpenModal }) => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="flex flex-col gap-4"
           >
-            <div className="flex items-center gap-3 text-cyan-400 font-semibold tracking-wider text-sm md:text-base">
-              <span className="uppercase px-2 py-1 bg-cyan-500/20 rounded backdrop-blur-sm border border-cyan-500/30">
-                {mediaType === 'movie' ? 'Featured Movie' : 'Featured Series'}
+            {/* Clean Unboxed Metadata */}
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-300 flex-wrap">
+              <span className="text-cyan-400 font-semibold uppercase tracking-wider">
+                {mediaType === 'movie' ? 'Featured Film' : 'Featured Series'}
               </span>
-              <span className="text-gray-300">
+              <span className="text-slate-500" aria-hidden="true">·</span>
+              <span className="text-emerald-400 font-semibold tabular-nums">
                 {Math.round((movie.vote_average || 0) * 10)}% Match
               </span>
-              <span className="text-gray-400">
-                {movie.release_date?.substring(0,4) || (movie as any).first_air_date?.substring(0,4)}
+              <span className="text-slate-500" aria-hidden="true">·</span>
+              <span className="text-slate-400">
+                {movie.release_date?.substring(0,4) || (movie as any).first_air_date?.substring(0,4) || '2024'}
+              </span>
+              <span className="text-slate-500" aria-hidden="true">·</span>
+              <span className="text-slate-400 font-semibold tracking-wider text-[11px] uppercase">
+                Ultra HD
               </span>
             </div>
 
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight text-white drop-shadow-2xl leading-none">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight text-white drop-shadow-2xl leading-[0.95] text-balance">
               {title}
             </h1>
             
-            <p className="text-gray-300 text-lg md:text-xl max-w-2xl leading-relaxed drop-shadow-md line-clamp-3">
+            <p className="text-slate-300 text-base sm:text-lg md:text-xl max-w-2xl leading-relaxed drop-shadow-md line-clamp-3">
               {movie.overview}
             </p>
 
-            <div className="flex items-center gap-4 mt-4 flex-wrap">
-              <button 
+            <div className="flex items-center gap-3.5 mt-2 flex-wrap">
+              <motion.button 
+                whileHover={{ scale: 1.04, y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 onClick={() => {
                   const activePartyCode = sessionStorage.getItem('active_party_code');
                   const partyQuery = activePartyCode ? `?party=${activePartyCode}` : '';
                   navigate(`/watch/${mediaType}/${movie.id}${mediaType === 'tv' ? '/season/1/episode/1' : ''}${partyQuery}`);
                 }}
-                className="group flex items-center gap-2 bg-white text-black px-8 py-4 rounded-full hover:bg-cyan-50 transition-all font-bold text-lg shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] hover:scale-105"
+                className="group flex items-center gap-2.5 bg-white text-black px-7 py-3.5 rounded-full hover:bg-cyan-50 transition-all font-bold text-base shadow-[0_0_25px_rgba(255,255,255,0.35)] hover:shadow-[0_0_35px_rgba(6,182,212,0.6)] cursor-pointer"
               >
-                <Play className="w-6 h-6 fill-black group-hover:text-cyan-600 transition-colors" />
-                Play Now
-              </button>
+                <Play className="w-5 h-5 fill-black group-hover:text-cyan-600 transition-colors" />
+                <span>Play Now</span>
+              </motion.button>
               
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 onClick={() => onOpenModal(movie)}
-                className="flex items-center gap-2 bg-slate-800/60 backdrop-blur-md text-white px-8 py-4 rounded-full hover:bg-slate-700/80 transition-all font-bold text-lg border border-white/10 hover:border-white/30"
+                className="flex items-center gap-2.5 bg-slate-900/80 backdrop-blur-xl text-white px-7 py-3.5 rounded-full hover:bg-slate-800 transition-all font-semibold text-base border border-white/15 hover:border-white/30 cursor-pointer shadow-lg"
               >
-                <Info className="w-6 h-6" />
-                More Info
-              </button>
+                <Info className="w-5 h-5 text-slate-300" />
+                <span>Details</span>
+              </motion.button>
 
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.04, y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
                 onClick={handleSurpriseMe}
-                className="flex items-center gap-2 bg-violet-600/20 backdrop-blur-md text-violet-300 px-6 py-4 rounded-full hover:bg-violet-600/40 transition-all font-bold text-lg border border-violet-500/30 hover:border-violet-400 hover:text-violet-200"
+                className="flex items-center gap-2 bg-violet-950/60 backdrop-blur-xl text-violet-300 px-5 py-3.5 rounded-full hover:bg-violet-900/60 transition-all font-medium text-sm border border-violet-500/30 hover:border-violet-400 cursor-pointer shadow-lg"
+                title="Shuffle Featured Title"
               >
-                <Sparkles className="w-5 h-5" />
-                Surprise Me
-              </button>
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <span>Shuffle</span>
+              </motion.button>
             </div>
           </motion.div>
         </AnimatePresence>

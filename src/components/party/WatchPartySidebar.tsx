@@ -5,6 +5,7 @@ import {
   UserX, Share2, User, X, LogIn, ChevronRight, Gamepad2, Loader2, Clock, UserPlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../utils/cn';
 import type { WatchParty, PartyMember, PartyMessage } from '../../types/party';
 import type { Media } from '../../types';
@@ -381,32 +382,37 @@ export function WatchPartySidebar({
           )}
         </div>
 
-        {/* Tab Toggle: Start Party vs Join Party vs Recent */}
-        <div className="flex border-b border-white/10 bg-slate-950/40 text-xs font-bold uppercase tracking-wider">
-          <button 
-            className={`flex-1 py-3 transition-colors cursor-pointer ${setupTab === 'create' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setSetupTab('create')}
-          >
-            Start
-          </button>
-          <button 
-            className={`flex-1 py-3 transition-colors cursor-pointer ${setupTab === 'join' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setSetupTab('join')}
-          >
-            Join
-          </button>
-          <button 
-            className={`flex-1 py-3 transition-colors flex items-center justify-center gap-1 cursor-pointer ${setupTab === 'recent' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
-            onClick={() => setSetupTab('recent')}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Recent</span>
-            {recentParties.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
-                {recentParties.length}
-              </span>
-            )}
-          </button>
+        {/* Tab Toggle: Start Party vs Join Party vs Recent with Motion Segmented Pill */}
+        <div className="flex border-b border-white/10 bg-slate-950/60 p-1.5 gap-1.5 relative">
+          {(['create', 'join', 'recent'] as const).map((tabKey) => {
+            const isActive = setupTab === tabKey;
+            const label = tabKey === 'create' ? 'Start' : tabKey === 'join' ? 'Join' : 'Recent';
+            return (
+              <button
+                key={tabKey}
+                onClick={() => setSetupTab(tabKey)}
+                className={cn(
+                  "flex-1 py-2 text-xs font-bold transition-colors relative flex items-center justify-center gap-1.5 rounded-xl z-10 cursor-pointer",
+                  isActive ? "text-cyan-300" : "text-slate-400 hover:text-white"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-setup-tab-pill"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+                  />
+                )}
+                {tabKey === 'recent' && <Clock className="w-3.5 h-3.5" />}
+                <span>{label}</span>
+                {tabKey === 'recent' && recentParties.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">
+                    {recentParties.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Setup Content */}
@@ -849,36 +855,76 @@ export function WatchPartySidebar({
         </div>
       </div>
 
-      {/* Realtime Tabs */}
-      <div className="flex border-b border-white/10 bg-slate-950/40 text-xs font-semibold">
+      {/* Realtime Tabs with Motion Segmented Pill */}
+      <div className="flex border-b border-white/10 bg-slate-950/60 p-1.5 gap-1 text-xs font-semibold relative">
         <button 
           onClick={() => setActiveTab('chat')} 
-          className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${activeTab === 'chat' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
+          className={cn(
+            "flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors cursor-pointer relative rounded-xl z-10",
+            activeTab === 'chat' ? "text-cyan-300 font-bold" : "text-slate-400 hover:text-white"
+          )}
         >
+          {activeTab === 'chat' && (
+            <motion.div
+              layoutId="active-party-tab-pill"
+              transition={{ type: "spring", stiffness: 450, damping: 32 }}
+              className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+            />
+          )}
           <MessageSquare className="w-3.5 h-3.5" />
           <span>Chat</span>
         </button>
         <button 
           onClick={() => setActiveTab('members')} 
-          className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${activeTab === 'members' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
+          className={cn(
+            "flex-1 py-1.5 flex items-center justify-center gap-1.5 transition-colors cursor-pointer relative rounded-xl z-10",
+            activeTab === 'members' ? "text-cyan-300 font-bold" : "text-slate-400 hover:text-white"
+          )}
         >
+          {activeTab === 'members' && (
+            <motion.div
+              layoutId="active-party-tab-pill"
+              transition={{ type: "spring", stiffness: 450, damping: 32 }}
+              className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+            />
+          )}
           <Users className="w-3.5 h-3.5" />
-          <span>Members ({members.length}/10)</span>
+          <span>Members ({members.length})</span>
         </button>
         <button 
           onClick={() => setActiveTab('recent')} 
-          className={`py-2 px-2.5 flex items-center justify-center gap-1 transition-colors cursor-pointer ${activeTab === 'recent' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
+          className={cn(
+            "py-1.5 px-2.5 flex items-center justify-center gap-1 transition-colors cursor-pointer relative rounded-xl z-10",
+            activeTab === 'recent' ? "text-cyan-300 font-bold" : "text-slate-400 hover:text-white"
+          )}
           title="Recently Viewed Sessions"
         >
+          {activeTab === 'recent' && (
+            <motion.div
+              layoutId="active-party-tab-pill"
+              transition={{ type: "spring", stiffness: 450, damping: 32 }}
+              className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+            />
+          )}
           <Clock className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Recent</span>
         </button>
         {isHost && (
           <button 
             onClick={() => setActiveTab('settings')} 
-            className={`py-2 px-3 flex items-center justify-center transition-colors cursor-pointer ${activeTab === 'settings' ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5' : 'text-slate-400 hover:text-white'}`}
+            className={cn(
+              "py-1.5 px-3 flex items-center justify-center transition-colors cursor-pointer relative rounded-xl z-10",
+              activeTab === 'settings' ? "text-cyan-300 font-bold" : "text-slate-400 hover:text-white"
+            )}
             title="Party Settings"
           >
+            {activeTab === 'settings' && (
+              <motion.div
+                layoutId="active-party-tab-pill"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                className="absolute inset-0 bg-white/10 border border-white/10 rounded-xl -z-10 shadow-sm"
+              />
+            )}
             <Settings className="w-3.5 h-3.5" />
           </button>
         )}
@@ -1047,29 +1093,34 @@ export function WatchPartySidebar({
             {/* Quick Emoji Reaction Bar */}
             <div className="px-3 py-1.5 bg-slate-950/80 border-t border-white/5 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
               {EMOJIS.map(emoji => (
-                <button
+                <motion.button
                   key={emoji}
+                  whileHover={{ scale: 1.35, y: -4 }}
+                  whileTap={{ scale: 0.85 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 20 }}
                   onClick={() => onSendReaction?.(emoji)}
-                  className="hover:scale-125 active:scale-95 transition-all text-xl p-1 rounded-lg hover:bg-white/10 shrink-0 cursor-pointer"
+                  className="text-xl p-1 rounded-xl hover:bg-white/10 shrink-0 cursor-pointer"
                   title={`Send ${emoji} reaction`}
                 >
                   {emoji}
-                </button>
+                </motion.button>
               ))}
             </div>
 
             {/* Chat Input form */}
             <div className="p-3 bg-slate-950 border-t border-white/10 relative">
               <form onSubmit={handleSend} className="flex items-center gap-2">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.92 }}
                   type="button"
                   onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-base hover:scale-105 transition-transform shrink-0 border border-white/20 cursor-pointer"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0 border border-white/20 cursor-pointer"
                   style={{ backgroundColor: `${localColor}25` }}
                   title="Change your avatar"
                 >
                   {localAvatar}
-                </button>
+                </motion.button>
 
                 <input
                   type="text"
@@ -1080,13 +1131,15 @@ export function WatchPartySidebar({
                   maxLength={400}
                 />
                 
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.92 }}
                   type="submit"
                   disabled={!msgInput.trim()}
                   className="p-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-40 text-white rounded-full transition-all shrink-0 shadow-md shadow-cyan-500/20 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                </button>
+                </motion.button>
               </form>
 
               {/* Avatar Picker Popover */}

@@ -61,6 +61,8 @@ export const getUserIdentity = () => {
 export interface UseWatchPartyProps {
   code: string | null;
   onRequestResync?: (seconds: number) => void;
+  onPlaybackAction?: (action: 'play' | 'pause' | 'seek', time: number) => void;
+  onPlaybackSync?: (sync: { isPlaying: boolean; targetTime: number; isHeartbeat: boolean; drift: number }) => void;
   onNavigateEpisode?: (season: number, episode: number) => void;
   onNavigateMedia?: (mediaType: 'movie' | 'tv', mediaId: number, season?: number | null, episode?: number | null) => void;
   onServerChange?: (serverKey: string) => void;
@@ -95,6 +97,8 @@ export interface WatchPartyPlayerInterface {
   seek: (targetTime: number) => void;
   /** Immediate resync to expected host position */
   resync: () => void;
+  /** Force authoritative resync from database/server */
+  forceResync: () => Promise<void>;
   /** Generic player event connector for <video> or iframe players */
   handlePlayerEvent: (event: { type: string; currentTime: number }) => void;
 }
@@ -109,6 +113,8 @@ export interface ControlRequest {
 export function useWatchParty({ 
   code, 
   onRequestResync, 
+  onPlaybackAction,
+  onPlaybackSync,
   onNavigateEpisode, 
   onNavigateMedia, 
   onServerChange, 
@@ -127,6 +133,7 @@ export function useWatchParty({
   const [userAvatar, setUserAvatarState] = useState<string>(getStoredUserAvatar);
   const [userColor, setUserColorState] = useState<string>(getStoredUserColor);
   const [onlyHostControls, setOnlyHostControls] = useState<boolean>(true);
+  const [controlGrantedTo, setControlGrantedTo] = useState<string | null>(null);
 
   // Control Request feature state
   const [controlRequests, setControlRequests] = useState<ControlRequest[]>([]);
@@ -149,6 +156,10 @@ export function useWatchParty({
   const partyRef = useRef<WatchParty | null>(null);
   const onRequestResyncRef = useRef(onRequestResync);
   onRequestResyncRef.current = onRequestResync;
+  const onPlaybackActionRef = useRef(onPlaybackAction);
+  onPlaybackActionRef.current = onPlaybackAction;
+  const onPlaybackSyncRef = useRef(onPlaybackSync);
+  onPlaybackSyncRef.current = onPlaybackSync;
   const onNavigateEpisodeRef = useRef(onNavigateEpisode);
   onNavigateEpisodeRef.current = onNavigateEpisode;
   const onNavigateMediaRef = useRef(onNavigateMedia);
@@ -172,6 +183,8 @@ export function useWatchParty({
   const socketRef = useRef<PartySocketClient | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlayerPositionRef = useRef<number>(0);
+  const lastPlaybackTimestampRef = useRef<number>(0);
+  const lastPlaybackVersionRef = useRef<number>(0);
 
   /**
    * Computes the calculated host position in seconds with clock skew and elapsed playback time.
@@ -211,11 +224,36 @@ export function useWatchParty({
    * Ingests authoritative playback and room state updates.
    */
   const applyStateUpdate = useCallback((newState: PartyState, _triggerUser?: string) => {
+    // Validate timestamp and version to reject stale out-of-order events
+    const updateTime = newState.state_updated_at
+      ? new Date(newState.state_updated_at.endsWith('Z') ? newState.state_updated_at : newState.state_updated_at + 'Z').getTime()
+      : 0;
+    const updateVer = (newState as any).version || 0;
+
+    if (updateTime > 0 && lastPlaybackTimestampRef.current > 0) {
+      if (updateTime < lastPlaybackTimestampRef.current) {
+        return; // Discard outdated state
+      }
+      if (updateTime === lastPlaybackTimestampRef.current && updateVer > 0 && lastPlaybackVersionRef.current > 0 && updateVer < lastPlaybackVersionRef.current) {
+        return; // Discard older version
+      }
+    }
+
+    if (updateTime > 0) {
+      lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, updateTime);
+    }
+    if (updateVer > 0) {
+      lastPlaybackVersionRef.current = Math.max(lastPlaybackVersionRef.current, updateVer);
+    }
+
     const prevParty = partyRef.current;
     stateRef.current = newState;
     setHostPaused(!newState.is_playing);
     if (newState.only_host_controls !== undefined) {
       setOnlyHostControls(newState.only_host_controls);
+    }
+    if ((newState as any).control_granted_to !== undefined) {
+      setControlGrantedTo((newState as any).control_granted_to || null);
     }
 
     // Keep party state ref synced
@@ -225,7 +263,8 @@ export function useWatchParty({
         ...newState,
         media_id: newState.media_id ?? prevParty.media_id,
         media_type: newState.media_type ?? prevParty.media_type,
-        title: newState.title ?? prevParty.title
+        title: newState.title ?? prevParty.title,
+        control_granted_to: (newState as any).control_granted_to ?? prevParty.control_granted_to
       };
       setParty(updatedParty);
     }
@@ -356,6 +395,9 @@ export function useWatchParty({
       if (data.settings?.hostOnly !== undefined) {
         setOnlyHostControls(data.settings.hostOnly);
       }
+      if (data.settings?.controlGrantedTo !== undefined) {
+        setControlGrantedTo(data.settings.controlGrantedTo || null);
+      }
       if (data.members) {
         setMembers(data.members);
       }
@@ -365,16 +407,34 @@ export function useWatchParty({
       const now = Date.now();
       const elapsed = data.isPlaying && data.hostUpdatedAt ? Math.max(0, (now - data.hostUpdatedAt) / 1000) : 0;
       const targetTime = (data.hostTime || 0) + elapsed;
+
+      const eventTime = data.updatedAt || data.hostUpdatedAt || 0;
+      const eventVer = data.version || 0;
+      if (eventTime > 0) {
+        lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, eventTime);
+      }
+      if (eventVer > 0) {
+        lastPlaybackVersionRef.current = Math.max(lastPlaybackVersionRef.current, eventVer);
+      }
+
       if (stateRef.current) {
         stateRef.current.is_playing = !!data.isPlaying;
         stateRef.current.position_seconds = targetTime;
+        stateRef.current.state_updated_at = new Date(data.hostUpdatedAt || now).toISOString();
         if (data.durationSeconds !== undefined && data.durationSeconds !== null) {
           stateRef.current.duration_seconds = data.durationSeconds;
         }
       }
       setHostPaused(!data.isPlaying);
-      if (!amIHost && data.isPlaying && targetTime > 0) {
+
+      if (!amIHost) {
         onRequestResyncRef.current?.(targetTime);
+        onPlaybackSyncRef.current?.({
+          isPlaying: !!data.isPlaying,
+          targetTime,
+          isHeartbeat: false,
+          drift: 0
+        });
       }
 
       if (partyRef.current) {
@@ -392,27 +452,65 @@ export function useWatchParty({
 
     // Handle incoming standardized playback_state
     client.on('playback_state', (data: PlaybackStatePayload) => {
-      const amIHost = partyRef.current ? String(partyRef.current.host_user_id) === String(identity.id) : false;
-      if (!amIHost) {
-        const now = Date.now();
-        const elapsed = data.isPlaying && data.hostUpdatedAt ? Math.max(0, (now - data.hostUpdatedAt) / 1000) : 0;
-        const targetTime = (data.hostTime || 0) + elapsed;
+      const amIHost = isHostRef.current || (partyRef.current ? String(partyRef.current.host_user_id) === String(identity.id) : false);
+      const amISender = data.senderId && String(data.senderId) === String(identity.id);
 
-        setHostPaused(!data.isPlaying);
-        if (stateRef.current) {
-          stateRef.current.is_playing = !!data.isPlaying;
-          stateRef.current.position_seconds = targetTime;
-          stateRef.current.state_updated_at = new Date(data.hostUpdatedAt || now).toISOString();
+      const eventTime = data.updatedAt || data.hostUpdatedAt || 0;
+      const eventVer = data.version || 0;
+
+      // Reject stale out-of-order events using monotonic timestamp & version check
+      if (eventTime > 0 && lastPlaybackTimestampRef.current > 0) {
+        if (eventTime < lastPlaybackTimestampRef.current) {
+          return;
         }
+        if (eventTime === lastPlaybackTimestampRef.current && eventVer > 0 && lastPlaybackVersionRef.current > 0 && eventVer < lastPlaybackVersionRef.current) {
+          return;
+        }
+      }
 
-        // Automatic video sync: when host pauses or plays or member drifts
-        if (!data.isPlaying) {
-          onRequestResyncRef.current?.(data.hostTime || 0);
-        } else if (data.isPlaying) {
-          const currentPos = lastPlayerPositionRef.current || 0;
-          const drift = Math.abs(currentPos - targetTime);
-          setDriftSeconds(drift);
-          if (drift > 1.8) {
+      if (eventTime > 0) {
+        lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, eventTime);
+      }
+      if (eventVer > 0) {
+        lastPlaybackVersionRef.current = Math.max(lastPlaybackVersionRef.current, eventVer);
+      }
+
+      setHostPaused(!data.isPlaying);
+
+      const now = Date.now();
+      const elapsed = data.isPlaying && data.hostUpdatedAt ? Math.max(0, (now - data.hostUpdatedAt) / 1000) : 0;
+      const targetTime = (data.hostTime || 0) + elapsed;
+
+      if (stateRef.current) {
+        stateRef.current.is_playing = !!data.isPlaying;
+        stateRef.current.position_seconds = targetTime;
+        stateRef.current.state_updated_at = new Date(data.hostUpdatedAt || now).toISOString();
+        if (data.duration) {
+          stateRef.current.duration_seconds = data.duration;
+        }
+      }
+
+      if (amISender) {
+        return;
+      }
+
+      if (!amIHost) {
+        const currentPos = lastPlayerPositionRef.current || 0;
+        const drift = Math.abs(currentPos - targetTime);
+        setDriftSeconds(drift);
+
+        if (onPlaybackSyncRef.current) {
+          onPlaybackSyncRef.current({
+            isPlaying: !!data.isPlaying,
+            targetTime,
+            isHeartbeat: !!data.isHeartbeat,
+            drift
+          });
+        } else {
+          // Automatic video sync: when host pauses or plays or member drifts
+          if (!data.isPlaying) {
+            onRequestResyncRef.current?.(data.hostTime || 0);
+          } else if (data.isPlaying && drift > 2.0) {
             onRequestResyncRef.current?.(targetTime);
           }
         }
@@ -542,6 +640,7 @@ export function useWatchParty({
         const amIHost = String(data.party.host_user_id) === String(identity.id);
         setIsHost(amIHost);
         setOnlyHostControls(data.party.only_host_controls ?? true);
+        setControlGrantedTo(data.party.control_granted_to || null);
         setHostPaused(!data.party.is_playing);
         stateRef.current = {
           is_playing: data.party.is_playing,
@@ -584,12 +683,17 @@ export function useWatchParty({
 
     client.on('control_granted', (data) => {
       setControlRequests(prev => prev.filter(r => String(r.requesterId) !== String(data.requesterId)));
-      setOnlyHostControls(false);
-      if (String(data.requesterId) === String(identity.id)) {
+      setControlGrantedTo(data.requesterId || null);
+      if (data.requesterId && String(data.requesterId) === String(identity.id)) {
         setMyControlRequestPending(false);
         setControlFeedback('🎉 Control Granted! You can now control player playback.');
         partySounds.playJoin();
         setTimeout(() => setControlFeedback(null), 5000);
+      } else if (!data.requesterId) {
+        if (controlGrantedTo === String(identity.id)) {
+          setControlFeedback('Your player controls have been locked.');
+          setTimeout(() => setControlFeedback(null), 5000);
+        }
       }
     });
 
@@ -610,6 +714,7 @@ export function useWatchParty({
         const amIHost = initData.is_host || (initData.party ? String(initData.party.host_user_id) === String(identity.id) : false);
         setIsHost(amIHost);
         setOnlyHostControls(initData.party.only_host_controls ?? true);
+        setControlGrantedTo(initData.party.control_granted_to || null);
         setHostPaused(!initData.party.is_playing);
 
         // Record in Recently Viewed watch parties
@@ -736,13 +841,14 @@ export function useWatchParty({
     
     socketRef.current.startHeartbeat(() => ({
       hostTime: lastPlayerPositionRef.current || stateRef.current?.position_seconds || 0,
-      isPlaying: stateRef.current ? stateRef.current.is_playing : true
+      isPlaying: stateRef.current ? stateRef.current.is_playing : !hostPaused,
+      duration: stateRef.current?.duration_seconds || undefined
     }), 2500);
 
     return () => {
       socketRef.current?.stopHeartbeat();
     };
-  }, [isHost, code]);
+  }, [isHost, code, hostPaused]);
 
   // =========================================================================
   // Player Interaction & State Publishing
@@ -771,6 +877,8 @@ export function useWatchParty({
     lastPublishRef.current = now;
     lastPlayerPositionRef.current = position;
 
+    // Immediately update local authoritative states
+    setHostPaused(!isPlaying);
     if (stateRef.current) {
       stateRef.current.is_playing = isPlaying;
       stateRef.current.position_seconds = position;
@@ -794,7 +902,9 @@ export function useWatchParty({
     if (socketRef.current && socketRef.current.isConnected) {
       socketRef.current.sendPlaybackCommand(
         eventType === 'seek' ? 'seek' : (isPlaying ? 'play' : 'pause'),
-        position
+        position,
+        isPlaying,
+        durationSeconds || undefined
       );
 
       socketRef.current.send({
@@ -811,37 +921,107 @@ export function useWatchParty({
    * Explicit Player Control Commands
    */
   const play = useCallback((currentTime?: number) => {
-    if (onlyHostControls && !isHost) return;
+    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id));
+    if (!canControl) return;
     const pos = currentTime !== undefined ? currentTime : (lastPlayerPositionRef.current || expectedHostPosition());
+    const now = Date.now();
+    lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, now);
+    lastPlaybackVersionRef.current += 1;
+    setHostPaused(false);
     publishState(true, pos, true, partyRef.current?.season, partyRef.current?.episode, partyRef.current?.server_key, 'play');
-  }, [publishState, expectedHostPosition, onlyHostControls, isHost]);
+    onPlaybackActionRef.current?.('play', pos);
+  }, [publishState, expectedHostPosition, onlyHostControls, isHost, controlGrantedTo]);
 
   const pause = useCallback((currentTime?: number) => {
-    if (onlyHostControls && !isHost) return;
+    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id));
+    if (!canControl) return;
     const pos = currentTime !== undefined ? currentTime : (lastPlayerPositionRef.current || expectedHostPosition());
+    const now = Date.now();
+    lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, now);
+    lastPlaybackVersionRef.current += 1;
+    setHostPaused(true);
     publishState(false, pos, true, partyRef.current?.season, partyRef.current?.episode, partyRef.current?.server_key, 'pause');
-  }, [publishState, expectedHostPosition, onlyHostControls, isHost]);
+    onPlaybackActionRef.current?.('pause', pos);
+  }, [publishState, expectedHostPosition, onlyHostControls, isHost, controlGrantedTo]);
 
   const togglePause = useCallback((currentTime?: number) => {
-    if (onlyHostControls && !isHost) return;
+    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id));
+    if (!canControl) return;
     const pos = currentTime !== undefined ? currentTime : (lastPlayerPositionRef.current || expectedHostPosition());
     if (hostPaused) {
       play(pos);
     } else {
       pause(pos);
     }
-  }, [onlyHostControls, isHost, hostPaused, expectedHostPosition, play, pause]);
+  }, [onlyHostControls, isHost, hostPaused, expectedHostPosition, play, pause, controlGrantedTo]);
 
   const seek = useCallback((targetTime: number) => {
-    if (onlyHostControls && !isHost) return;
-    const isPlaying = stateRef.current?.is_playing ?? true;
+    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id));
+    if (!canControl) return;
+    const now = Date.now();
+    lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, now);
+    lastPlaybackVersionRef.current += 1;
+    const isPlaying = stateRef.current?.is_playing ?? !hostPaused;
+    lastPlayerPositionRef.current = targetTime;
     publishState(isPlaying, targetTime, true, partyRef.current?.season, partyRef.current?.episode, partyRef.current?.server_key, 'seek');
-  }, [publishState, onlyHostControls, isHost]);
+    onPlaybackActionRef.current?.('seek', targetTime);
+  }, [publishState, onlyHostControls, isHost, hostPaused, controlGrantedTo]);
+
+  /**
+   * Authoritative on-demand synchronization:
+   * Requests the absolute latest Host playback state from the server database,
+   * synchronizes currentTime, isPlaying, duration, season, episode, movie,
+   * and never restores a stale paused state.
+   */
+  const forceResync = useCallback(async () => {
+    if (!code) return;
+    try {
+      const res = await partyApi.get(code);
+      if (!res || !res.party) return;
+      const p = res.party;
+      const now = Date.now();
+      const lastUpdate = new Date(p.state_updated_at || now).getTime();
+      const elapsed = p.is_playing ? Math.max(0, (now - lastUpdate) / 1000) : 0;
+      const exactHostTime = (p.position_seconds || 0) + elapsed;
+
+      lastPlaybackTimestampRef.current = Math.max(lastPlaybackTimestampRef.current, lastUpdate);
+      lastPlaybackVersionRef.current = Math.max(lastPlaybackVersionRef.current, p.version || 0);
+
+      setHostPaused(!p.is_playing);
+      if (stateRef.current) {
+        stateRef.current.is_playing = !!p.is_playing;
+        stateRef.current.position_seconds = exactHostTime;
+        stateRef.current.state_updated_at = p.state_updated_at;
+        if (p.duration_seconds) stateRef.current.duration_seconds = p.duration_seconds;
+      }
+
+      if (partyRef.current) {
+        const prev = partyRef.current;
+        if (p.media_id && (Number(p.media_id) !== Number(prev.media_id) || p.media_type !== prev.media_type)) {
+          onNavigateMediaRef.current?.(p.media_type || 'movie', Number(p.media_id), p.season, p.episode);
+        } else if (p.season !== prev.season || p.episode !== prev.episode) {
+          onNavigateEpisodeRef.current?.(p.season, p.episode);
+        }
+        setParty(p);
+      }
+
+      onRequestResyncRef.current?.(exactHostTime);
+      onPlaybackSyncRef.current?.({
+        isPlaying: !!p.is_playing,
+        targetTime: exactHostTime,
+        isHeartbeat: false,
+        drift: 0
+      });
+    } catch (err) {
+      console.error('Failed to force resync:', err);
+      const fallbackTarget = expectedHostPosition();
+      onRequestResyncRef.current?.(fallbackTarget);
+    }
+  }, [code, expectedHostPosition, setParty]);
 
   const resync = useCallback(() => {
-    const target = expectedHostPosition();
-    onRequestResyncRef.current?.(target);
-  }, [expectedHostPosition]);
+    forceResync();
+  }, [forceResync]);
 
   const checkDrift = useCallback((currentPosition: number) => {
     lastPlayerPositionRef.current = currentPosition;
@@ -879,7 +1059,7 @@ export function useWatchParty({
 
   const handlePlayerEvent = useCallback((event: { type: string; currentTime: number }) => {
     lastPlayerPositionRef.current = event.currentTime;
-    const canControl = isHost || !onlyHostControls;
+    const canControl = isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id));
 
     if (canControl) {
       const isPlaying = event.type === 'play' || event.type === 'timeupdate' || event.type === 'seeked';
@@ -901,7 +1081,7 @@ export function useWatchParty({
       const myStatus = driftSeconds > 3.0 ? 'desynced' : 'synced';
       sendMemberStatus(myStatus, event.currentTime, driftSeconds);
     }
-  }, [isHost, onlyHostControls, hostPaused, checkDrift, driftSeconds, publishState, sendMemberStatus]);
+  }, [isHost, onlyHostControls, hostPaused, checkDrift, driftSeconds, publishState, sendMemberStatus, controlGrantedTo]);
 
   // =========================================================================
   // Chat & Social Controls
@@ -1034,36 +1214,42 @@ export function useWatchParty({
     setMyControlRequestPending(true);
     setControlFeedback('Request sent! Waiting for host to approve...');
 
-    if (socketRef.current && socketRef.current.isConnected) {
-      socketRef.current.requestControl();
-    }
     const identity = getUserIdentity();
-    await partyApi.requestControl(code, {
-      id: identity.id,
-      name: identity.name,
-      avatar: avatarRef.current
-    }).catch(console.error);
+    try {
+      await partyApi.requestControl(code, {
+        id: identity.id,
+        name: identity.name,
+        avatar: avatarRef.current
+      });
+    } catch (err: any) {
+      console.error('Request control failed:', err);
+      setMyControlRequestPending(false);
+      setControlFeedback(err.message || 'Failed to request control. Please try again.');
+    }
   }, [code, isHost]);
 
   const grantControl = useCallback(async (requesterId: string | number) => {
     if (!code || !isHost) return;
     setControlRequests(prev => prev.filter(r => String(r.requesterId) !== String(requesterId)));
-    setOnlyHostControls(false);
 
-    if (socketRef.current && socketRef.current.isConnected) {
-      socketRef.current.respondControlRequest(requesterId, true);
+    try {
+      await partyApi.respondControl(code, requesterId, true);
+    } catch (err: any) {
+      console.error('Grant control failed:', err);
+      setControlFeedback(err.message || 'Failed to grant control.');
     }
-    await partyApi.respondControl(code, requesterId, true).catch(console.error);
   }, [code, isHost]);
 
   const declineControl = useCallback(async (requesterId: string | number) => {
     if (!code || !isHost) return;
     setControlRequests(prev => prev.filter(r => String(r.requesterId) !== String(requesterId)));
 
-    if (socketRef.current && socketRef.current.isConnected) {
-      socketRef.current.respondControlRequest(requesterId, false);
+    try {
+      await partyApi.respondControl(code, requesterId, false);
+    } catch (err: any) {
+      console.error('Decline control failed:', err);
+      setControlFeedback(err.message || 'Failed to decline control.');
     }
-    await partyApi.respondControl(code, requesterId, false).catch(console.error);
   }, [code, isHost]);
 
   const clearControlFeedback = useCallback(() => {
@@ -1078,7 +1264,7 @@ export function useWatchParty({
     currentTime: lastPlayerPositionRef.current || stateRef.current?.position_seconds || 0,
     isHost,
     onlyHostControls,
-    canControl: isHost || !onlyHostControls,
+    canControl: isHost || !onlyHostControls || (controlGrantedTo && String(controlGrantedTo) === String(getUserIdentity().id)),
     driftSeconds,
     isSynced: driftSeconds <= 3.0,
     hostPaused,
@@ -1086,8 +1272,9 @@ export function useWatchParty({
     pause,
     seek,
     resync,
+    forceResync,
     handlePlayerEvent
-  }), [hostPaused, isHost, onlyHostControls, driftSeconds, play, pause, seek, resync, handlePlayerEvent]);
+  }), [hostPaused, isHost, onlyHostControls, driftSeconds, play, pause, seek, resync, forceResync, handlePlayerEvent, controlGrantedTo]);
 
   return {
     // Room & Session State
@@ -1104,6 +1291,7 @@ export function useWatchParty({
     userAvatar,
     userColor,
     onlyHostControls,
+    controlGrantedTo,
 
     // Control Request State & Actions
     controlRequests,
@@ -1123,6 +1311,7 @@ export function useWatchParty({
     togglePause,
     seek,
     resync,
+    forceResync,
     handlePlayerEvent,
     publishState,
     expectedHostPosition,

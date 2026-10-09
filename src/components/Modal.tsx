@@ -4,6 +4,7 @@ import { Media, MediaDetails } from '../types';
 import { api, getImageUrl } from '../services/tmdbApi';
 import { X, Play, Plus, Check, Star, Calendar, Clock } from 'lucide-react';
 import { useWatchlist } from '../context/WatchlistContext';
+import { useRecentlyWatched } from '../hooks/useRecentlyWatched';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ModalProps {
@@ -14,9 +15,16 @@ interface ModalProps {
 export const Modal: React.FC<ModalProps> = ({ item, onClose }) => {
   const [details, setDetails] = useState<MediaDetails | null>(null);
   const { isInWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
+  const { addRecentlyWatched } = useRecentlyWatched();
   const navigate = useNavigate();
   const inList = isInWatchlist(item.id);
   const mediaType = item.media_type || ((item as any).first_air_date ? 'tv' : 'movie');
+
+  useEffect(() => {
+    if (item) {
+      addRecentlyWatched(item);
+    }
+  }, [item, addRecentlyWatched]);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -53,50 +61,59 @@ export const Modal: React.FC<ModalProps> = ({ item, onClose }) => {
         ></motion.div>
         
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.94, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative bg-slate-900 w-full max-w-4xl max-h-[85vh] rounded-2xl overflow-y-auto overflow-x-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-slate-700 scrollbar-hide z-10"
+          exit={{ opacity: 0, scale: 0.94, y: 16 }}
+          transition={{ type: "spring", damping: 28, stiffness: 350 }}
+          className="relative bg-[#070D18] w-full max-w-4xl max-h-[85vh] rounded-3xl overflow-y-auto overflow-x-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-white/10 scrollbar-hide z-10"
         >
           {/* Header Image */}
-          <div className="relative h-[40vh] sm:h-[50vh] w-full">
+          <div className="relative h-[38vh] sm:h-[48vh] w-full bg-slate-950">
             <img 
               src={getImageUrl(item.backdrop_path || item.poster_path || '', 'original')} 
               alt={title}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070D18] via-[#070D18]/50 to-transparent"></div>
             
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={onClose}
-              className="absolute top-4 right-4 w-10 h-10 bg-slate-900/50 hover:bg-slate-800 rounded-full flex items-center justify-center text-white backdrop-blur-md transition-colors border border-white/10 hover:border-white/30 z-20"
+              className="absolute top-4 right-4 w-10 h-10 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white backdrop-blur-md transition-colors border border-white/15 cursor-pointer z-20 shadow-lg"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
-            </button>
+            </motion.button>
 
             <div className="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
               <div className="flex-1">
-                <h2 className="text-3xl sm:text-5xl font-black text-white drop-shadow-lg mb-4">{title}</h2>
-                <div className="flex flex-wrap items-center gap-4">
-                  <button 
+                <h2 className="text-3xl sm:text-5xl font-black text-white drop-shadow-xl mb-4 tracking-tight leading-tight">{title}</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <motion.button 
+                    whileHover={{ scale: 1.04, y: -2 }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     onClick={() => {
                       const activePartyCode = sessionStorage.getItem('active_party_code');
                       const partyQuery = activePartyCode ? `?party=${activePartyCode}` : '';
                       navigate(`/watch/${mediaType}/${item.id}${mediaType === 'tv' ? '/season/1/episode/1' : ''}${partyQuery}`);
                     }}
-                    className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg hover:bg-cyan-50 hover:text-cyan-600 transition-all font-bold shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                    className="flex items-center gap-2 bg-white text-black px-7 py-3 rounded-xl hover:bg-cyan-50 transition-all font-bold shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)] cursor-pointer"
                   >
                     <Play className="w-5 h-5 fill-current" />
-                    Play
-                  </button>
-                  <button 
+                    <span>Play Now</span>
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.03, y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     onClick={() => inList ? removeFromWatchlist(item.id) : addToWatchlist(item)}
-                    className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-md border border-slate-600 text-white px-6 py-3 rounded-lg hover:border-cyan-400 hover:text-cyan-400 transition-colors font-semibold"
+                    className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-white/15 text-white px-5 py-3 rounded-xl hover:border-cyan-400 hover:text-cyan-300 transition-colors font-semibold cursor-pointer shadow-md"
                   >
-                    {inList ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                    {inList ? 'Added' : 'My List'}
-                  </button>
+                    {inList ? <Check className="w-5 h-5 text-emerald-400" /> : <Plus className="w-5 h-5" />}
+                    <span>{inList ? 'In My List' : 'Add to List'}</span>
+                  </motion.button>
                 </div>
               </div>
             </div>
@@ -107,30 +124,32 @@ export const Modal: React.FC<ModalProps> = ({ item, onClose }) => {
             <div className="flex flex-col md:flex-row gap-8">
               {/* Left Column (Details) */}
               <div className="flex-[2] space-y-6">
-                <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-                  <span className="flex items-center gap-1 text-green-400 bg-green-400/10 px-2 py-1 rounded">
-                    <Star className="w-4 h-4 fill-current" />
+                {/* Clean Unboxed Metadata */}
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
+                  <span className="text-emerald-400 font-bold tabular-nums">
                     {Math.round((item.vote_average || 0) * 10)}% Match
                   </span>
-                  <span className="flex items-center gap-1 text-slate-300">
-                    <Calendar className="w-4 h-4" />
-                    {item.release_date?.substring(0, 4) || (item as any).first_air_date?.substring(0, 4)}
+                  <span className="text-slate-600" aria-hidden="true">·</span>
+                  <span className="tabular-nums">
+                    {item.release_date?.substring(0, 4) || (item as any).first_air_date?.substring(0, 4) || '2024'}
                   </span>
                   {details?.runtime && (
-                    <span className="flex items-center gap-1 text-slate-300">
-                      <Clock className="w-4 h-4" />
-                      {formatRuntime(details.runtime)}
-                    </span>
+                    <>
+                      <span className="text-slate-600" aria-hidden="true">·</span>
+                      <span className="tabular-nums">{formatRuntime(details.runtime)}</span>
+                    </>
                   )}
                   {details?.number_of_seasons && (
-                    <span className="text-slate-300">
-                      {details.number_of_seasons} Season{details.number_of_seasons > 1 ? 's' : ''}
-                    </span>
+                    <>
+                      <span className="text-slate-600" aria-hidden="true">·</span>
+                      <span>{details.number_of_seasons} Season{details.number_of_seasons > 1 ? 's' : ''}</span>
+                    </>
                   )}
-                  <span className="border border-slate-600 text-slate-400 px-1.5 py-0.5 rounded text-xs uppercase">HD</span>
+                  <span className="text-slate-600" aria-hidden="true">·</span>
+                  <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Ultra HD</span>
                 </div>
 
-                <p className="text-slate-200 text-lg leading-relaxed">{item.overview}</p>
+                <p className="text-slate-200 text-base sm:text-lg leading-relaxed">{item.overview}</p>
 
                 {/* Cast */}
                 {details?.credits?.cast && details.credits.cast.length > 0 && (

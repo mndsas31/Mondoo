@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { api, GENRES, tmdbAxios } from '../services/tmdbApi';
 import { Media } from '../types';
 import { Hero } from '../components/Hero';
@@ -41,7 +42,12 @@ export const Series: React.FC = () => {
   const openExplore = (title: string, endpoint: string) => setExploreModal({ isOpen: true, title, endpoint });
 
   return (
-    <div className="pb-20">
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.4 }}
+      className="pb-20"
+    >
       <Hero onOpenModal={setSelectedSeries} />
       <div className="mt-[-150px] relative z-20 space-y-16 lg:space-y-20">
         {loading ? (
@@ -58,6 +64,6 @@ export const Series: React.FC = () => {
 
       {selectedSeries && <Modal item={selectedSeries} onClose={() => setSelectedSeries(null)} />}
       <ExploreModal {...exploreModal} type="tv" onClose={() => setExploreModal(prev => ({...prev, isOpen: false}))} />
-    </div>
+    </motion.div>
   );
 };
